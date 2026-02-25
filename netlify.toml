@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Proxy API calls to WordPress backend
+[[redirects]]
+  from = "/api/*"
+  to = "https://bestrongagain.com/workout-programs/api/general/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
