@@ -1,13 +1,21 @@
 # React Trainer Dashboard
 
 ## What This Is
-A dashboard for fitness trainers to view/manage clients, track their progress, edit programs, and monitor volume stats. Lives inside the `react-workout-builder` repo as a sub-project.
+A standalone dashboard for fitness trainers to view/manage clients, track their progress, edit programs, and monitor volume stats. Extracted from the workout builder repo into its own repository and Netlify deployment.
 
+**Repo:** `Glen-collab/react-trainer-dashboard`
 **Stack:** React 19, Vite 7, Tailwind 4, Chart.js 4.5
 **Build:** `npm run build` -> `dist/dashboard.js` + `dist/dashboard.css`
 **Mount:** `#td-react-root` (WordPress) or `#root` (standalone)
-**Netlify:** `bsa-trainer-dashboard.netlify.app` — API proxy `/api/*` -> `bestrongagain.com` + SPA redirect
-**Netlify config:** `netlify.toml` has both `/api/*` proxy and `/*` SPA redirect
+**Netlify:** `bsa-trainer-dashboard.netlify.app` — auto-deploys on push to `main`
+**Netlify config:** `netlify.toml` has both `/api/*` proxy -> `bestrongagain.com` and `/*` SPA redirect
+
+---
+
+## Related Repos
+- **Workout Builder:** `Glen-collab/workoutbuilder` — trainers build programs here
+- **Workout Tracker:** `Glen-collab/WorkoutTracker` — clients track workouts here
+- **WordPress Plugins:** `wp-content_plugins/` — trainer-dashboard-modular, general-workout-tracker-modular, general-workout-builder-modular
 
 ---
 
@@ -104,3 +112,11 @@ window.tdConfig = { builderUrl: 'https://workoutbuild.netlify.app' }  // Builder
 - **Completion colors:** green (>=80%), yellow (>=50%), red (<50%)
 - **Layout:** Responsive - 1col mobile, 2col tablet, 4col desktop (stats grid)
 - **Components:** All Tailwind utility classes, no component library
+
+---
+
+## Git / Deployment Notes
+
+- Netlify auto-deploys on push to `main` branch
+- WordPress plugin (`trainer-dashboard-modular`) loads compiled dist files
+- Linked from the Workout Builder via "Dashboard" button (opens new tab)
