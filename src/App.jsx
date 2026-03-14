@@ -25,13 +25,24 @@ export default function App() {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, clients: [] });
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Initial fetch
+  // Initial fetch with retry on failure (first load after deploy can fail due to cold start)
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const [clientsData, statsData] = await Promise.all([fetchClients(), fetchStats()]);
-      if (clientsData) setClients(clientsData);
-      if (statsData) setStats(statsData);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const [clientsData, statsData] = await Promise.all([fetchClients(), fetchStats()]);
+          if (cancelled) return;
+          if (clientsData) setClients(clientsData);
+          if (statsData) setStats(statsData);
+          return; // success, stop retrying
+        } catch {
+          if (cancelled) return;
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
     })();
+    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = useCallback(async () => {
