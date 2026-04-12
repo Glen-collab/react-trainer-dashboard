@@ -2,10 +2,10 @@
   command = "npm run build"
   publish = "dist"
 
-# Proxy API calls to WordPress backend
+# Proxy API calls to AWS backend
 [[redirects]]
   from = "/api/*"
-  to = "https://bestrongagain.com/workout-programs/api/general/:splat"
+  to = "https://app.bestrongagain.com/api/workout/:splat"
   status = 200
   force = true
 

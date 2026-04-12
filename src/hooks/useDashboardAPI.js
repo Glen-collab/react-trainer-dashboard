@@ -7,7 +7,7 @@ const getApiBase = () => {
   if (window.location.hostname !== 'localhost') {
     return '/api';
   }
-  return window.trainerDashboard?.apiBase || 'https://bestrongagain.com/workout-programs/api/general';
+  return window.trainerDashboard?.apiBase || 'https://app.bestrongagain.com/api/workout';
 };
 
 export default function useDashboardAPI() {
