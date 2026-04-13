@@ -14,6 +14,7 @@ export default function ClientTable({
   detailsLoading,
   onCloseDetails,
   onUpdateMaxes,
+  onSendCode,
 }) {
   const allSelected = clients.length > 0 && selectedIds.size === clients.length;
   const clientKey = (c) => `${c.access_code || ''}|${c.user_email}`;
@@ -82,6 +83,15 @@ export default function ClientTable({
                   >
                     {expanded ? 'Hide Details' : 'View Details'}
                   </button>
+                  {onSendCode && (
+                    <button
+                      onClick={() => onSendCode(client)}
+                      className="w-9 h-9 rounded-lg text-blue-500 hover:bg-blue-50 flex items-center justify-center text-lg transition-colors"
+                      title="Send code to client"
+                    >
+                      &#9993;
+                    </button>
+                  )}
                   <button
                     onClick={() => onDeleteClient(client)}
                     className="w-9 h-9 rounded-lg text-red-500 hover:bg-red-50 flex items-center justify-center text-lg transition-colors"
@@ -192,6 +202,15 @@ export default function ClientTable({
                         >
                           {expanded ? 'Hide' : 'View Details'}
                         </button>
+                        {onSendCode && (
+                          <button
+                            onClick={() => onSendCode(client)}
+                            className="w-8 h-8 rounded-lg text-blue-500 hover:bg-blue-50 flex items-center justify-center text-sm transition-colors"
+                            title="Send code to client"
+                          >
+                            &#9993;
+                          </button>
+                        )}
                         <button
                           onClick={() => onDeleteClient(client)}
                           className="w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 flex items-center justify-center text-sm transition-colors"

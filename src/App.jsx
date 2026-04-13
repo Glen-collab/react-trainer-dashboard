@@ -16,8 +16,74 @@ export default function App() {
   return <DashboardApp authUser={authUser} onLogout={logout} />;
 }
 
+function CoachWalkthrough({ onDismiss, isAdmin }) {
+  const [step, setStep] = useState(0);
+  const steps = isAdmin ? [
+    { icon: '\uD83D\uDC4B', title: 'Welcome Back, Glen', text: "Your trainer dashboard — all clients, all programs, everything in one place." },
+    { icon: '\u2709', title: 'Send Codes', text: "Hit the envelope icon next to any client to email them their access code and app link. No more texting codes." },
+    { icon: '\uD83D\uDD0D', title: 'View Details', text: "Click any client to see their volume stats, weekly progress charts, recent workouts, and 1RM values." },
+    { icon: '\u270F\uFE0F', title: 'Edit Programs', text: "Click 'Edit Program' on a client to open their workout in the builder. Changes only apply to THAT client." },
+  ] : [
+    { icon: '\uD83D\uDC4B', title: 'Welcome, Coach!', text: "This is your client dashboard. You'll see everyone who signed up through your referral link or is on a program you built." },
+    { icon: '\uD83D\uDCCB', title: 'Build Programs', text: "Head to the Workout Builder to create programs. Save them, grab the access code, and send it to your client using the envelope button." },
+    { icon: '\u2709', title: 'Send Codes', text: "Hit the envelope icon next to any client to email them their access code and a direct link to the app. One tap and they're training." },
+    { icon: '\uD83D\uDD0D', title: 'View Details', text: "Click any client to see their workout logs, volume stats, and progress. This is how you stay on top of their training." },
+    { icon: '\u270F\uFE0F', title: 'Override Programs', text: "Need to change something for one client? Click 'Edit Program' — your changes only affect that person, not the base program." },
+    { icon: '\uD83D\uDCB0', title: 'Your Earnings', text: "You keep 80% of every client subscription. Log into app.bestrongagain.com to see your earnings, referral link, and recruited coaches." },
+  ];
+  const current = steps[step];
+  const isLast = step === steps.length - 1;
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-5">
+      <div className="bg-white rounded-2xl max-w-[380px] w-full p-8 text-center shadow-2xl">
+        <div className="text-5xl mb-3">{current.icon}</div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">{current.title}</h2>
+        <p className="text-sm text-gray-600 leading-relaxed mb-6">{current.text}</p>
+        <div className="flex justify-center gap-1.5 mb-5">
+          {steps.map((_, i) => (
+            <div key={i} className={`w-2 h-2 rounded-full ${i === step ? 'bg-purple-600' : 'bg-gray-200'}`} />
+          ))}
+        </div>
+        <div className="flex gap-3 justify-center">
+          {step > 0 && (
+            <button onClick={() => setStep(step - 1)} className="px-6 py-2.5 border-2 border-gray-200 rounded-xl text-gray-600 font-semibold text-sm">Back</button>
+          )}
+          <button
+            onClick={() => isLast ? onDismiss() : setStep(step + 1)}
+            className={`px-8 py-2.5 rounded-xl text-white font-semibold text-sm ${isLast ? 'bg-green-600' : 'bg-gradient-to-r from-purple-500 to-indigo-600'}`}
+          >{isLast ? "Let's Go!" : 'Next'}</button>
+        </div>
+        {!isLast && (
+          <button onClick={onDismiss} className="mt-3 text-xs text-gray-400 bg-transparent border-none cursor-pointer">Skip</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DashboardApp({ authUser, onLogout }) {
-  const { fetchClients, fetchStats, fetchClientDetails, deleteClient, updateClientMaxes } = useDashboardAPI(authUser);
+  const { fetchClients, fetchStats, fetchClientDetails, deleteClient, updateClientMaxes, sendCodeToClient } = useDashboardAPI(authUser);
+
+  // First-time walkthrough
+  const walkthroughKey = `bsa_dashboard_walkthrough_${authUser.id}`;
+  const [showWalkthrough, setShowWalkthrough] = useState(() => {
+    try { return !localStorage.getItem(walkthroughKey); } catch { return false; }
+  });
+  const dismissWalkthrough = () => {
+    setShowWalkthrough(false);
+    try { localStorage.setItem(walkthroughKey, 'true'); } catch {}
+  };
+
+  const handleSendCode = useCallback(async (client) => {
+    const coachName = authUser?.first_name || 'Your Coach';
+    try {
+      await sendCodeToClient(client.access_code, client.user_email, client.user_name || client.name, coachName);
+      alert(`Access code sent to ${client.user_email}`);
+    } catch (err) {
+      alert('Failed to send: ' + err.message);
+    }
+  }, [sendCodeToClient, authUser]);
 
   const [clients, setClients] = useState([]);
   const [stats, setStats] = useState({
@@ -224,6 +290,7 @@ function DashboardApp({ authUser, onLogout }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {showWalkthrough && <CoachWalkthrough onDismiss={dismissWalkthrough} isAdmin={authUser.role === 'admin'} />}
       {/* Header */}
       <header className="bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white px-4 py-6 sm:py-8 shadow-lg">
         <div className="max-w-7xl mx-auto flex justify-between items-start">
@@ -271,6 +338,7 @@ function DashboardApp({ authUser, onLogout }) {
             setClientDetails(null);
           }}
           onUpdateMaxes={handleUpdateMaxes}
+          onSendCode={handleSendCode}
         />
 
         <BulkActions

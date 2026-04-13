@@ -166,6 +166,18 @@ export default function useDashboardAPI(authUser) {
     [externalApi],
   );
 
+  const sendCodeToClient = useCallback(
+    async (accessCode, userEmail, userName, coachName) => {
+      return await externalApi('send-code-to-client.php', {
+        access_code: accessCode,
+        user_email: userEmail,
+        user_name: userName,
+        coach_name: coachName,
+      });
+    },
+    [externalApi],
+  );
+
   return {
     loading,
     error,
@@ -178,6 +190,7 @@ export default function useDashboardAPI(authUser) {
     saveUserOverride,
     deleteUserOverride,
     updateClientMaxes,
+    sendCodeToClient,
   };
 }
 
