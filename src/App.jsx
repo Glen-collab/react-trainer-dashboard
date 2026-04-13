@@ -5,9 +5,19 @@ import SearchBar from './components/dashboard/SearchBar';
 import ClientTable from './components/clients/ClientTable';
 import BulkActions from './components/clients/BulkActions';
 import DeleteModal from './components/modals/DeleteModal';
+import LoginGate, { useAuth } from './components/auth/LoginGate';
 
 export default function App() {
-  const { fetchClients, fetchStats, fetchClientDetails, deleteClient, updateClientMaxes } = useDashboardAPI();
+  const { user: authUser, loading: authLoading, login, logout } = useAuth();
+
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Loading...</div>;
+  if (!authUser) return <LoginGate onLogin={login} />;
+
+  return <DashboardApp authUser={authUser} onLogout={logout} />;
+}
+
+function DashboardApp({ authUser, onLogout }) {
+  const { fetchClients, fetchStats, fetchClientDetails, deleteClient, updateClientMaxes } = useDashboardAPI(authUser);
 
   const [clients, setClients] = useState([]);
   const [stats, setStats] = useState({
@@ -216,11 +226,21 @@ export default function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white px-4 py-6 sm:py-8 shadow-lg">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-2xl sm:text-3xl font-bold">Trainer Dashboard</h1>
-          <p className="text-white/80 mt-1 text-sm sm:text-base">
-            Manage your clients and programs
-          </p>
+        <div className="max-w-7xl mx-auto flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold">
+              {authUser.role === 'coach' ? 'Coach Dashboard' : 'Trainer Dashboard'}
+            </h1>
+            <p className="text-white/80 mt-1 text-sm sm:text-base">
+              {authUser.first_name ? `Welcome, ${authUser.first_name}` : 'Manage your clients and programs'}
+            </p>
+          </div>
+          <button
+            onClick={onLogout}
+            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+          >
+            Logout
+          </button>
         </div>
       </header>
 

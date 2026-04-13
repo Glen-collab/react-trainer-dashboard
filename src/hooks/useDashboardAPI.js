@@ -10,7 +10,7 @@ const getApiBase = () => {
   return window.trainerDashboard?.apiBase || 'https://app.bestrongagain.com/api/workout';
 };
 
-export default function useDashboardAPI() {
+export default function useDashboardAPI(authUser) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -41,6 +41,16 @@ export default function useDashboardAPI() {
     setError(null);
     try {
       if (window.location.hostname === 'localhost') return getMockClients();
+      // Coaches see only their referred clients
+      if (authUser && authUser.role === 'coach' && authUser.id) {
+        const res = await fetch(`https://app.bestrongagain.com/api/coaches/workout-clients/${authUser.id}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authUser.token}` },
+        });
+        const json = await res.json();
+        return json.data || [];
+      }
+      // Admin sees all
       return await externalApi('get-clients.php', {});
     } catch (err) {
       setError(err.message);
@@ -49,7 +59,7 @@ export default function useDashboardAPI() {
     } finally {
       setLoading(false);
     }
-  }, [externalApi]);
+  }, [externalApi, authUser]);
 
   const fetchStats = useCallback(async () => {
     try {
