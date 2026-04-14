@@ -75,15 +75,46 @@ function DashboardApp({ authUser, onLogout }) {
     try { localStorage.setItem(walkthroughKey, 'true'); } catch {}
   };
 
-  const handleSendCode = useCallback(async (client) => {
+  const [sendCodeModal, setSendCodeModal] = useState(null); // { client, programs }
+  const [sendCodeLoading, setSendCodeLoading] = useState(false);
+  const [myPrograms, setMyPrograms] = useState([]);
+
+  // Load coach's programs for the send code picker
+  useEffect(() => {
+    if (!authUser?.email) return;
+    (async () => {
+      try {
+        const res = await fetch(`https://app.bestrongagain.com/api/workout/list-programs.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authUser.email }),
+        });
+        const data = await res.json();
+        if (data.success && data.data?.programs) {
+          setMyPrograms(data.data.programs);
+        }
+      } catch {}
+    })();
+  }, [authUser?.email]);
+
+  const handleSendCode = useCallback((client) => {
+    setSendCodeModal({ client, selectedCode: client.access_code || '' });
+  }, []);
+
+  const handleSendCodeConfirm = useCallback(async (code) => {
+    if (!sendCodeModal) return;
+    const { client } = sendCodeModal;
     const coachName = authUser?.first_name || 'Your Coach';
+    setSendCodeLoading(true);
     try {
-      await sendCodeToClient(client.access_code, client.user_email, client.user_name || client.name, coachName);
-      alert(`Access code sent to ${client.user_email}`);
+      await sendCodeToClient(code, client.user_email, client.user_name || client.name, coachName);
+      setSendCodeModal(null);
+      alert(`Code ${code} sent to ${client.user_email}`);
     } catch (err) {
       alert('Failed to send: ' + err.message);
     }
-  }, [sendCodeToClient, authUser]);
+    setSendCodeLoading(false);
+  }, [sendCodeModal, sendCodeToClient, authUser]);
 
   const [clients, setClients] = useState([]);
   const [stats, setStats] = useState({
@@ -355,6 +386,64 @@ function DashboardApp({ authUser, onLogout }) {
         clients={deleteModal.clients}
         loading={deleteLoading}
       />
+
+      {/* Send Code Modal */}
+      {sendCodeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4" onClick={() => setSendCodeModal(null)}>
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-r from-purple-500 to-indigo-600 px-6 py-4">
+              <h3 className="text-white text-lg font-bold m-0">Send Program Code</h3>
+              <p className="text-white/70 text-sm mt-1 m-0">To: {sendCodeModal.client.user_name || sendCodeModal.client.name} ({sendCodeModal.client.user_email})</p>
+            </div>
+            <div className="p-6">
+              <label className="block text-sm font-semibold text-gray-600 mb-2">Select Program</label>
+              <div className="max-h-64 overflow-y-auto mb-4 border border-gray-200 rounded-xl">
+                {myPrograms.length === 0 ? (
+                  <div className="p-4 text-center text-gray-400 text-sm">No programs found</div>
+                ) : (
+                  myPrograms.map((p) => (
+                    <button
+                      key={p.accessCode}
+                      onClick={() => setSendCodeModal(prev => ({ ...prev, selectedCode: p.accessCode }))}
+                      className={`w-full text-left px-4 py-3 border-b border-gray-100 transition-colors ${
+                        sendCodeModal.selectedCode === p.accessCode
+                          ? 'bg-purple-50 border-l-4 border-l-purple-500'
+                          : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="font-semibold text-gray-900 text-sm">{p.name}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{p.daysPerWeek} days/wk &middot; {p.totalWeeks} weeks</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono font-bold text-purple-600 text-base">{p.accessCode}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleSendCodeConfirm(sendCodeModal.selectedCode)}
+                  disabled={!sendCodeModal.selectedCode || sendCodeLoading}
+                  className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold rounded-xl disabled:opacity-50"
+                >
+                  {sendCodeLoading ? 'Sending...' : `Send Code ${sendCodeModal.selectedCode || ''}`}
+                </button>
+                <button
+                  onClick={() => setSendCodeModal(null)}
+                  className="py-3 px-5 border-2 border-gray-200 text-gray-600 font-semibold rounded-xl hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
