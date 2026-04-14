@@ -66,7 +66,9 @@ export default function useDashboardAPI(authUser) {
       if (window.location.hostname === 'localhost') {
         return { active_clients: 12, workouts_this_week: 34, total_workouts: 892, avg_completion: 78 };
       }
-      return await externalApi('get-dashboard-stats.php', {});
+      // Pass coach email for filtered stats (admin gets global)
+      const payload = authUser && authUser.role === 'coach' ? { coach_email: authUser.email } : {};
+      return await externalApi('get-dashboard-stats.php', payload);
     } catch {
       return { active_clients: 0, workouts_this_week: 0, total_workouts: 0, avg_completion: 0 };
     }
