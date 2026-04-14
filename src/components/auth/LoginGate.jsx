@@ -9,6 +9,21 @@ export function useAuth() {
 
   useEffect(() => {
     try {
+      // Check for SSO token from coach platform
+      const params = new URLSearchParams(window.location.search);
+      const sso = params.get('sso');
+      if (sso) {
+        const ssoData = JSON.parse(sso);
+        if (ssoData.token && ssoData.user) {
+          const userData = typeof ssoData.user === 'string' ? JSON.parse(ssoData.user) : ssoData.user;
+          const authData = { ...userData, token: ssoData.token };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(authData));
+          setUser(authData);
+          window.history.replaceState({}, '', window.location.pathname);
+          setLoading(false);
+          return;
+        }
+      }
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setUser(JSON.parse(saved));
     } catch {}
