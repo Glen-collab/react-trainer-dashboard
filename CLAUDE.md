@@ -12,10 +12,13 @@ A standalone dashboard for fitness trainers to view/manage clients, track their 
 
 ---
 
-## Related Repos
-- **Workout Builder:** `Glen-collab/workoutbuilder` — trainers build programs here
-- **Workout Tracker:** `Glen-collab/WorkoutTracker` — clients track workouts here
-- **WordPress Plugins:** `wp-content_plugins/` — trainer-dashboard-modular, general-workout-tracker-modular, general-workout-builder-modular
+## Related Repos (BSA Ecosystem)
+
+- **`Glen-collab/bsa-coach-platform`** — Central Flask backend + React coach/admin/member dashboards. This dashboard hits its API at `app.bestrongagain.com/api/workout/*` + `/api/coaches/*`. Cross-repo architecture: `bsa-coach-platform/docs/ARCHITECTURE.md`.
+- **`Glen-collab/workoutbuilder`** — Coach-facing program builder. This dashboard opens the builder in `?mode=override` when a coach edits a client's week/day.
+- **`Glen-collab/WorkoutTracker`** — Client-facing PWA. The Send Code button in this dashboard emails a client the access code that lands them in the tracker.
+- **`Glen-collab/react-trainer-dashboard`** — (this repo) Coach management dashboard.
+- **WordPress Plugins:** `wp-content_plugins/` — trainer-dashboard-modular, general-workout-tracker-modular, general-workout-builder-modular (legacy, apps now use Netlify deploys)
 
 ---
 
