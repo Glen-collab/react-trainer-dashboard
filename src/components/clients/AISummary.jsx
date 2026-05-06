@@ -1,13 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Coach-facing AI summary card. Two modes:
 //   - Weekly: friendly + motivational, client-tone, ~4-6 sentences
 //   - Monthly: data-heavy report with tonnage/calories/wins/areas to focus
 // Both produce text the coach can edit, then send to the client via mailto.
+//
+// Voice: defaults to Glen, but if the coach who owns this client has a
+// chatbot_config set in bsa-coach-platform (via /chatbot-voice page),
+// we fetch it and pass it as coach_config context so the bot speaks in
+// THEIR voice with THEIR business link / sign-off.
 
 const CHAT_API_BASE =
   (typeof window !== 'undefined' && window.tdConfig?.chatApiBase) ||
   'https://chat.bestrongagain.com';
+
+const PLATFORM_API_BASE =
+  (typeof window !== 'undefined' && window.tdConfig?.apiBase) ||
+  'https://app.bestrongagain.com/api';
 
 function compactWorkouts(recent, days) {
   if (!Array.isArray(recent) || !recent.length) return [];
@@ -33,8 +42,8 @@ function compactWorkouts(recent, days) {
     .slice(0, days === 7 ? 8 : 25);
 }
 
-function buildPrompt(period, data) {
-  const header = `You are Coach Glen writing a ${period} progress message for ${data.name}.`;
+function buildPrompt(period, data, voice) {
+  const header = `You are ${voice} writing a ${period} progress message for ${data.name}.`;
 
   const factBlock =
     `Program: ${data.program || '(no program loaded)'}\n` +
@@ -63,7 +72,7 @@ function buildPrompt(period, data) {
       factBlock + '\nSessions:\n' + sessionLines,
       '',
       'TASK:',
-      "Write a 4-6 sentence weekly check-in to the client. Warm, direct, motivational — Glen's voice. Call out a specific win from the data, point to ONE thing to focus on next week, end with energy. No corporate fluff, no bullet lists, no headings. Address the client by their first name. Sign off as 'Coach Glen' on a new line.",
+      `Write a 4-6 sentence weekly check-in to the client. Warm, direct, motivational. Call out a specific win from the data, point to ONE thing to focus on next week, end with energy. No corporate fluff, no bullet lists, no headings. Address the client by their first name. Sign off as the coach on a new line.`,
       'Output ONLY the email body. No subject line. No preamble.'
     ].join('\n');
   }
@@ -81,7 +90,7 @@ function buildPrompt(period, data) {
     "  2. A 'BY THE NUMBERS' section with each metric on its own line: tonnage, calories burned, workouts completed, cardio minutes, completion %.",
     "  3. A 'WINS' paragraph naming the most notable progress this month.",
     "  4. A 'FOCUS NEXT MONTH' paragraph pointing to 2-3 things to dial in.",
-    "  5. Sign off 'Coach Glen' on a new line.",
+    "  5. Sign off as the coach on a new line.",
     "More clinical than the weekly version — the numbers should be visible. Address the client by first name. Output ONLY the email body."
   ].join('\n');
 }
@@ -91,8 +100,30 @@ export default function AISummary({ client, details }) {
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState(null);
   const [summary, setSummary] = useState('');
+  const [coachConfig, setCoachConfig] = useState(null);
 
   const firstName = (client?.user_name || '').split(' ')[0] || 'Athlete';
+
+  // If we know which coach owns this client, fetch their chatbot voice config
+  // so the summary speaks in their voice. Public read endpoint — safe to call
+  // from any origin.
+  const coachId =
+    client?.referred_by_id ||
+    client?.coach_id ||
+    (typeof window !== 'undefined' && window.tdConfig?.coachId) ||
+    null;
+
+  useEffect(() => {
+    if (!coachId) { setCoachConfig(null); return; }
+    let cancelled = false;
+    fetch(`${PLATFORM_API_BASE}/coaches/chatbot-config/${coachId}`, { credentials: 'omit' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((c) => { if (!cancelled) setCoachConfig(c || null); })
+      .catch(() => { if (!cancelled) setCoachConfig(null); });
+    return () => { cancelled = true; };
+  }, [coachId]);
+
+  const voiceName = coachConfig?.coach_voice_name || 'Coach Glen';
 
   async function generate(p) {
     setPeriod(p);
@@ -119,8 +150,12 @@ export default function AISummary({ client, details }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: buildPrompt(p, data),
-          context: { source: 'trainer_dashboard', user_first_name: firstName }
+          message: buildPrompt(p, data, voiceName),
+          context: {
+            source: 'trainer_dashboard',
+            user_first_name: firstName,
+            coach_config: coachConfig || undefined
+          }
         })
       });
       if (!res.ok) {
