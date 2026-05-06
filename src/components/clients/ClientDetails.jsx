@@ -3,6 +3,7 @@ import { completionColor, completionBg } from '../../utils/helpers';
 import WeeklyProgressChart from '../charts/WeeklyProgressChart';
 import VolumeChart from '../charts/VolumeChart';
 import RecentWorkouts from './RecentWorkouts';
+import AISummary from './AISummary';
 
 export default function ClientDetails({ client, details, loading, onClose, onUpdateMaxes }) {
   const [showMaxesEditor, setShowMaxesEditor] = useState(false);
@@ -202,6 +203,9 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
 
         {/* Recent Workouts */}
         <RecentWorkouts workouts={recent_workouts} />
+
+        {/* AI Coach Summary — generate weekly/monthly + email to client */}
+        <AISummary client={client} details={details} />
 
         {/* Edit Program CTA */}
         {client?.access_code && (
