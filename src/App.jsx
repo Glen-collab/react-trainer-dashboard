@@ -177,10 +177,12 @@ function DashboardApp({ authUser, onLogout }) {
         break;
       case 'recent':
       default:
-        result.sort(
-          (a, b) =>
-            new Date(b.last_logged_date || 0) - new Date(a.last_logged_date || 0),
-        );
+        // Real API returns last_workout / lastWorkout; mock uses last_logged_date.
+        result.sort((a, b) => {
+          const ad = a.last_logged_date || a.last_workout || a.lastWorkout || 0;
+          const bd = b.last_logged_date || b.last_workout || b.lastWorkout || 0;
+          return new Date(bd) - new Date(ad);
+        });
         break;
     }
 

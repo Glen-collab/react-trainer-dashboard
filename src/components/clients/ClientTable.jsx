@@ -60,7 +60,7 @@ export default function ClientTable({
                     Week {client.current_week}, Day {client.current_day}
                   </span>
                   <span className="text-xs text-gray-500">
-                    Last: {formatDate(client.last_logged_date)}
+                    Last: {formatDate(client.last_logged_date || client.last_workout || client.lastWorkout)}
                   </span>
                 </div>
 
@@ -176,7 +176,7 @@ export default function ClientTable({
                       </span>
                     </td>
                     <td className="p-3 text-sm text-gray-600">
-                      {formatDate(client.last_logged_date)}
+                      {formatDate(client.last_logged_date || client.last_workout || client.lastWorkout)}
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
