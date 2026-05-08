@@ -45,15 +45,6 @@ function compactWorkouts(recent, days) {
 function buildPrompt(period, data, voice) {
   const header = `You are ${voice} writing a ${period} progress message for ${data.name}.`;
 
-  const factBlock =
-    `Program: ${data.program || '(no program loaded)'}\n` +
-    `Current week: ${data.current_week ?? '?'}\n` +
-    `Workouts completed: ${data.workouts_logged ?? 0}${data.expected_workouts ? ' of ' + data.expected_workouts + ' expected' : ''}\n` +
-    `Completion rate: ${data.completion_pct ?? 0}%\n` +
-    (data.total_tonnage    ? `Total tonnage: ${data.total_tonnage.toLocaleString()} lbs\n` : '') +
-    (data.total_calories   ? `Total calories burned: ${data.total_calories.toLocaleString()}\n` : '') +
-    (data.cardio_minutes   ? `Cardio minutes: ${data.cardio_minutes}\n` : '');
-
   const sessionLines = (data.sessions || [])
     .map((s) => {
       const bits = [];
@@ -62,36 +53,62 @@ function buildPrompt(period, data, voice) {
       if (s.cardio_min) bits.push(`${s.cardio_min} min cardio`);
       const notes = s.notes ? `  notes: "${s.notes}"` : '';
       return `  ${s.date} (${s.day}): ${bits.join(', ') || 'logged'}${notes}`;
-    }).join('\n') || '  (no sessions in this window)';
+    }).join('\n') || '  (none in this window)';
 
   if (period === 'weekly') {
+    // THIS WEEK ONLY — not cumulative. Weekly is a check-in, not a program recap.
+    const thisWeekFacts =
+      `Sessions THIS week: ${data.workouts_this_week ?? 0} of ${data.days_per_week ?? '?'} planned\n` +
+      (data.tonnage_this_week  ? `Tonnage this week: ${Math.round(data.tonnage_this_week).toLocaleString()} lbs\n` : '') +
+      (data.calories_this_week ? `Calories this week: ${Math.round(data.calories_this_week).toLocaleString()}\n` : '') +
+      (data.cardio_min_this_week ? `Cardio minutes this week: ${data.cardio_min_this_week}\n` : '') +
+      `\nProgram context (background only — do NOT lead with these numbers):\n` +
+      `  Program: ${data.program || '(no program)'} · Week ${data.current_week ?? '?'}\n` +
+      `  Lifetime: ${data.workouts_logged ?? 0} workouts logged${data.total_tonnage ? `, ${data.total_tonnage.toLocaleString()} lbs tonnage` : ''}\n`;
+
     return [
       header,
       '',
       'CONTEXT (last 7 days):',
-      factBlock + '\nSessions:\n' + sessionLines,
+      thisWeekFacts + '\nSessions this week:\n' + sessionLines,
+      '',
+      'TONE RULES (these override everything else):',
+      '  - This is a WEEKLY CHECK-IN, not a performance review. Be warm, encouraging, energizing.',
+      '  - ALWAYS lead with what they did right. Even ONE workout this week is a win — name it.',
+      '  - NEVER shame, scold, or use words like "miss", "rough", "failure", "big problem", "we need to talk".',
+      '  - If they had a low or zero week, frame it as "life happens — let\'s get back at it" with hope and a small concrete next step. NOT discipline.',
+      '  - Do NOT cite cumulative/lifetime program completion %. That belongs in the monthly report.',
+      '  - Goal: athlete reads it and feels seen + motivated to train tomorrow.',
       '',
       'TASK:',
-      `Write a 4-6 sentence weekly check-in to the client. Warm, direct, motivational. Call out a specific win from the data, point to ONE thing to focus on next week, end with energy. No corporate fluff, no bullet lists, no headings. Address the client by their first name. Sign off as the coach on a new line.`,
-      'Output ONLY the email body. No subject line. No preamble.'
+      'Write a 3-5 sentence weekly check-in. Address the client by first name. End with energy. Sign off as the coach on a new line. Output ONLY the email body.',
     ].join('\n');
   }
 
-  // monthly
+  // monthly — clinical, by-the-numbers, full program context
+  const monthlyFacts =
+    `Program: ${data.program || '(no program loaded)'}\n` +
+    `Current week: ${data.current_week ?? '?'}\n` +
+    `Workouts completed: ${data.workouts_logged ?? 0}${data.expected_workouts ? ' of ' + data.expected_workouts + ' expected' : ''}\n` +
+    `Completion rate: ${data.completion_pct ?? 0}%\n` +
+    (data.total_tonnage    ? `Total tonnage: ${data.total_tonnage.toLocaleString()} lbs\n` : '') +
+    (data.total_calories   ? `Total calories burned: ${data.total_calories.toLocaleString()}\n` : '') +
+    (data.cardio_minutes   ? `Cardio minutes: ${data.cardio_minutes}\n` : '');
+
   return [
     header,
     '',
     'CONTEXT (last 30 days):',
-    factBlock + '\nSessions:\n' + sessionLines,
+    monthlyFacts + '\nSessions:\n' + sessionLines,
     '',
     'TASK:',
-    "Write a monthly progress report for the client. Include:",
-    "  1. A short opening paragraph (2-3 sentences) framing the month and any pattern you see.",
+    "Write a monthly progress report. Include:",
+    "  1. Short opening paragraph (2-3 sentences) framing the month and any pattern.",
     "  2. A 'BY THE NUMBERS' section with each metric on its own line: tonnage, calories burned, workouts completed, cardio minutes, completion %.",
-    "  3. A 'WINS' paragraph naming the most notable progress this month.",
-    "  4. A 'FOCUS NEXT MONTH' paragraph pointing to 2-3 things to dial in.",
+    "  3. A 'WINS' paragraph naming notable progress.",
+    "  4. A 'FOCUS NEXT MONTH' paragraph with 2-3 things to dial in. Constructive — direction, not discipline.",
     "  5. Sign off as the coach on a new line.",
-    "More clinical than the weekly version — the numbers should be visible. Address the client by first name. Output ONLY the email body."
+    "More clinical than the weekly check-in. Numbers should be visible but stay encouraging. Address the client by first name. Output ONLY the email body."
   ].join('\n');
 }
 
@@ -132,17 +149,40 @@ export default function AISummary({ client, details }) {
     setSummary('');
 
     const days = p === 'weekly' ? 7 : 30;
+    const sessions = compactWorkouts(details?.recent_workouts, days);
+
+    // For weekly, compute this-week-only rollups so the prompt can frame the
+    // message as a check-in (not a program audit). 7-day window from today.
+    const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const thisWeekSessions = (details?.recent_workouts || []).filter((w) => {
+      const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
+      return d >= cutoffMs;
+    });
+    let weekTonnage = 0, weekCals = 0, weekCardio = 0;
+    for (const w of thisWeekSessions) {
+      const vs = w.parsed_data?.volume_stats || w.volume_stats || {};
+      weekTonnage += vs.tonnage || 0;
+      weekCals    += vs.est_calories || 0;
+      weekCardio  += vs.cardio_minutes || 0;
+    }
+
     const data = {
       name: client?.user_name || client?.user_email || 'Athlete',
       program: client?.program_name,
       current_week: client?.current_week,
+      days_per_week: details?.days_per_week,
       completion_pct: Math.min(Math.round(details?.completion_rate || 0), 100),
       workouts_logged: details?.total_logged || 0,
       expected_workouts: details?.expected_workouts || 0,
       total_tonnage: details?.total_volume_stats?.tonnage,
       total_calories: details?.total_volume_stats?.est_calories,
       cardio_minutes: details?.total_volume_stats?.cardio_minutes,
-      sessions: compactWorkouts(details?.recent_workouts, days)
+      // weekly-only rollups
+      workouts_this_week: thisWeekSessions.length,
+      tonnage_this_week:  weekTonnage,
+      calories_this_week: weekCals,
+      cardio_min_this_week: weekCardio,
+      sessions,
     };
 
     try {
