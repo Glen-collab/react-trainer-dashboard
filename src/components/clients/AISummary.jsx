@@ -118,6 +118,8 @@ export default function AISummary({ client, details }) {
   const [error, setError]     = useState(null);
   const [summary, setSummary] = useState('');
   const [coachConfig, setCoachConfig] = useState(null);
+  const [coachNotes, setCoachNotes] = useState('');
+  const [expanding, setExpanding]   = useState(false);
 
   const firstName = (client?.user_name || '').split(' ')[0] || 'Athlete';
 
@@ -227,6 +229,70 @@ export default function AISummary({ client, details }) {
     navigator.clipboard?.writeText(summary).catch(() => {});
   }
 
+  // Take the current summary + the coach's freeform observations, ask the
+  // LLM to rewrite the summary so it incorporates those observations and
+  // adds expanded coaching guidance on them. Stays in the same voice and
+  // keeps the same tone profile as the original (weekly = warm, monthly =
+  // clinical).
+  async function expandWithNotes() {
+    const notes = coachNotes.trim();
+    if (!notes || !summary) return;
+    setExpanding(true);
+    setError(null);
+
+    const toneRules = period === 'weekly'
+      ? 'Stay warm and encouraging. Address the client by their first name. End with energy. Sign off as the coach on a new line.'
+      : 'Stay clinical but constructive. Keep the BY THE NUMBERS section if there is one. Address the client by first name. Sign off as the coach on a new line.';
+
+    const prompt = [
+      `You are ${voiceName} revising a ${period || 'progress'} message you wrote for ${firstName}.`,
+      '',
+      'Here is the current draft you wrote:',
+      '"""',
+      summary,
+      '"""',
+      '',
+      "The coach has added these PERSONAL observations from this week's training that the data alone doesn't capture:",
+      '"""',
+      notes,
+      '"""',
+      '',
+      'TASK: Rewrite the message so it naturally weaves in the coach\'s observations and provides expanded, specific coaching guidance on them.',
+      ' - Reference the observations directly (e.g. nutrition habits, recovery, mindset, life stressors, what was discussed in person) so the client knows the coach has been paying attention to the bigger picture.',
+      ' - Give actionable, concrete advice on the observations — not generic platitudes. If they ate garbage on the weekend, say what to swap or how to plan; if they\'re not sleeping enough, name the change.',
+      ' - Keep the workout-data parts of the original, but the message can grow longer to accommodate the new content.',
+      toneRules,
+      '',
+      'Output ONLY the new message body. No preamble.',
+    ].join('\n');
+
+    try {
+      const res = await fetch(`${CHAT_API_BASE}/api/embed-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: prompt,
+          context: {
+            source: 'trainer_dashboard',
+            user_first_name: firstName,
+            coach_config: coachConfig || undefined,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        throw new Error(t || `${res.status} ${res.statusText}`);
+      }
+      const json = await res.json();
+      setSummary(json.response || summary);
+      setCoachNotes('');   // clear the input — observations are now baked in
+    } catch (e) {
+      setError(e.message || 'Could not expand the summary.');
+    } finally {
+      setExpanding(false);
+    }
+  }
+
   return (
     <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 p-5 lg:col-span-2">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -297,6 +363,35 @@ export default function AISummary({ client, details }) {
               >
                 Regenerate
               </button>
+            </div>
+          )}
+
+          {!busy && summary && (
+            <div className="mt-4 p-3 rounded-lg bg-white border border-amber-200">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Add your own observations to expand the summary
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2 leading-snug">
+                The data only tells part of the story. Drop in anything {firstName} told you, what you saw in person,
+                nutrition / sleep / mood / life stuff — Coach Glen rewrites the message to weave it in with concrete advice.
+              </p>
+              <textarea
+                value={coachNotes}
+                onChange={(e) => setCoachNotes(e.target.value)}
+                disabled={expanding}
+                rows={3}
+                placeholder={`e.g. "${firstName} says they're eating great M-F but binging junk Sat/Sun and feeling stuck on weight. Sleep has been 5-6 hrs."`}
+                className="w-full px-3 py-2 rounded-md border border-gray-300 bg-white text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={expandWithNotes}
+                  disabled={expanding || !coachNotes.trim()}
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+                >
+                  {expanding ? 'Expanding…' : '✨ Expand summary with my notes'}
+                </button>
+              </div>
             </div>
           )}
         </>
