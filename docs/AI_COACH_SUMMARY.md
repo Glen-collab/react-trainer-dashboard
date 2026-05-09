@@ -112,3 +112,12 @@ The summary itself sits in a `<textarea>` so the coach can hand-edit before send
 |----------------------------------------------------|--------------------------------------------------------------------------|
 | `src/components/clients/AISummary.jsx`             | The whole card — generate, expand, email, copy, regenerate              |
 | `src/components/clients/ClientDetails.jsx`         | Hosts the AISummary card alongside charts                                |
+
+---
+
+## Related docs
+
+- **[`workouttracker/docs/CHATBOT_VOICE_AND_FREE_STARTER.md`](../../workouttracker/docs/CHATBOT_VOICE_AND_FREE_STARTER.md)** — same coach-voice resolution mechanics. The tracker's chatbot and this dashboard's AI Summary both pick the coach voice from `users.chatbot_config` via `GET /api/coaches/chatbot-config/<coach_id>`, then forward `coach_config` into `bsa-chatbot`'s `/api/embed-chat`.
+- **[`bsa-coach-platform/docs/GYM_ENTITY.md`](../../bsa-coach-platform/docs/GYM_ENTITY.md)** — when an admin transfers a coach's clients (partner quit/died), the next AI Summary generated for those clients automatically signs as the new coach. The voice resolution is the trigger.
+- **[`bsa-coach-platform/docs/SMART_IMPORT.md`](../../bsa-coach-platform/docs/SMART_IMPORT.md)** — many of the programs being summarized got built via Smart Import, which is why the data this card sees is consistent across coaches.
+- **[`bsa-coach-platform/docs/ARCHITECTURE.md`](../../bsa-coach-platform/docs/ARCHITECTURE.md)** — full BSA ecosystem map.
