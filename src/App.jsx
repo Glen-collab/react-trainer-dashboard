@@ -2,10 +2,12 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import useDashboardAPI from './hooks/useDashboardAPI';
 import StatsCards from './components/dashboard/StatsCards';
 import SearchBar from './components/dashboard/SearchBar';
+import TriageFilters from './components/dashboard/TriageFilters';
 import ClientTable from './components/clients/ClientTable';
 import BulkActions from './components/clients/BulkActions';
 import DeleteModal from './components/modals/DeleteModal';
 import LoginGate, { useAuth } from './components/auth/LoginGate';
+import { triageBucket } from './utils/progress';
 
 export default function App() {
   const { user: authUser, loading: authLoading, login, logout } = useAuth();
@@ -125,6 +127,7 @@ function DashboardApp({ authUser, onLogout }) {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('recent');
+  const [triageFilter, setTriageFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [expandedClient, setExpandedClient] = useState(null);
   const [clientDetails, setClientDetails] = useState(null);
@@ -162,10 +165,12 @@ function DashboardApp({ authUser, onLogout }) {
   const filteredClients = useMemo(() => {
     let result = [...clients].filter((c) => {
       const term = searchTerm.toLowerCase();
-      return (
+      const matchesSearch =
         (c.user_name || '').toLowerCase().includes(term) ||
-        (c.user_email || '').toLowerCase().includes(term)
-      );
+        (c.user_email || '').toLowerCase().includes(term);
+      if (!matchesSearch) return false;
+      if (triageFilter !== 'all' && triageBucket(c) !== triageFilter) return false;
+      return true;
     });
 
     switch (sortBy) {
@@ -187,7 +192,7 @@ function DashboardApp({ authUser, onLogout }) {
     }
 
     return result;
-  }, [clients, searchTerm, sortBy]);
+  }, [clients, searchTerm, sortBy, triageFilter]);
 
   // View details
   const handleViewDetails = useCallback(
@@ -354,6 +359,12 @@ function DashboardApp({ authUser, onLogout }) {
           sortBy={sortBy}
           onSortChange={setSortBy}
           onRefresh={handleRefresh}
+        />
+
+        <TriageFilters
+          clients={clients}
+          activeFilter={triageFilter}
+          onChange={setTriageFilter}
         />
 
         <ClientTable

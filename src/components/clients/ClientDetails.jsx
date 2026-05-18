@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { completionColor, completionBg } from '../../utils/helpers';
+import { weekTrend, trendBadge } from '../../utils/progress';
 import WeeklyProgressChart from '../charts/WeeklyProgressChart';
 import VolumeChart from '../charts/VolumeChart';
 import RecentWorkouts from './RecentWorkouts';
 import AISummary from './AISummary';
+import ProgressHighlights from './ProgressHighlights';
 
 export default function ClientDetails({ client, details, loading, onClose, onUpdateMaxes }) {
   const [showMaxesEditor, setShowMaxesEditor] = useState(false);
@@ -63,6 +65,23 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
   const daysPerWeek = days_per_week || client?.days_per_week || 5;
   const pct = Math.min(Math.round(completion_rate), 100);
 
+  // This-week vs last-week, computed off weekly_progress + weekly_volume_stats.
+  // Program-week aligned, not calendar — matches what current_week says.
+  const sortedProgress = [...(weekly_progress || [])].sort(
+    (a, b) => (b.week_number || 0) - (a.week_number || 0),
+  );
+  const sessionsThisWeek = sortedProgress[0]?.workouts_completed || 0;
+  const sessionsPrevWeek = sortedProgress[1]?.workouts_completed;
+  const sessionDeltaPct = sessionsPrevWeek == null
+    ? null
+    : sessionsPrevWeek === 0
+      ? (sessionsThisWeek > 0 ? 100 : 0)
+      : Math.round(((sessionsThisWeek - sessionsPrevWeek) / sessionsPrevWeek) * 100);
+
+  const wkly       = weekTrend(weekly_volume_stats);
+  const tonnageT   = trendBadge('tonnage', wkly);
+  const caloriesT  = trendBadge('est_calories', wkly);
+
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 sm:p-6 relative">
       {/* Close button */}
@@ -106,27 +125,52 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
 
       {/* Grid layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5">
-        {/* Stats Summary Card */}
-        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100 flex items-center gap-5">
-          {/* Circular progress indicator */}
+        {/* THIS WEEK — leading metric, program-week aligned */}
+        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-xs font-semibold text-purple-700 uppercase tracking-wide">This Week</h3>
+            <span className="text-[10px] text-gray-400">Week {client?.current_week ?? '?'}</span>
+          </div>
+          <p className="text-3xl font-bold text-gray-900">
+            {sessionsThisWeek}
+            <span className="text-lg font-normal text-gray-400"> / {daysPerWeek}</span>
+            <span className="text-sm font-medium text-gray-500 ml-1">sessions</span>
+          </p>
+          <div className="flex gap-1.5 mt-2 mb-3">
+            {Array.from({ length: daysPerWeek }).map((_, i) => (
+              <span
+                key={i}
+                className={`flex-1 h-2 rounded-full ${i < sessionsThisWeek ? 'bg-purple-500' : 'bg-gray-200'}`}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {tonnageT && tonnageT.current > 0 && (
+              <TrendChip
+                label={`${tonnageT.current.toLocaleString()} lbs`}
+                delta={tonnageT.previous > 0 ? tonnageT.deltaPct : null}
+              />
+            )}
+            {caloriesT && caloriesT.current > 0 && (
+              <TrendChip
+                label={`${caloriesT.current.toLocaleString()} cal`}
+                delta={caloriesT.previous > 0 ? caloriesT.deltaPct : null}
+              />
+            )}
+            {sessionDeltaPct != null && (
+              <TrendChip label="vs last week" delta={sessionDeltaPct} />
+            )}
+          </div>
+        </div>
+
+        {/* Lifetime — program total, demoted from hero */}
+        <div className="bg-white rounded-xl p-5 border border-gray-200 flex items-center gap-5">
           <div className="relative w-20 h-20 flex-shrink-0">
             <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+              <circle cx="40" cy="40" r="34" fill="none" className="stroke-gray-200" strokeWidth="8" />
               <circle
-                cx="40"
-                cy="40"
-                r="34"
-                fill="none"
-                className="stroke-gray-200"
-                strokeWidth="8"
-              />
-              <circle
-                cx="40"
-                cy="40"
-                r="34"
-                fill="none"
-                className="stroke-purple-500"
-                strokeWidth="8"
-                strokeLinecap="round"
+                cx="40" cy="40" r="34" fill="none"
+                className="stroke-purple-500" strokeWidth="8" strokeLinecap="round"
                 strokeDasharray={`${(pct / 100) * 213.6} 213.6`}
               />
             </svg>
@@ -134,26 +178,21 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
               <span className={`text-lg font-bold ${completionColor(pct)}`}>{pct}%</span>
             </div>
           </div>
-
           <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
-              Completion
-            </h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Program total</h3>
             <p className="text-2xl font-bold text-gray-900">
-              {total_logged}{' '}
-              <span className="text-base font-normal text-gray-400">
-                / {expected_workouts}
-              </span>
+              {total_logged}
+              <span className="text-base font-normal text-gray-400"> / {expected_workouts}</span>
             </p>
             <p className="text-xs text-gray-500">workouts logged</p>
             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden mt-1">
-              <div
-                className={`h-full rounded-full ${completionBg(pct)}`}
-                style={{ width: `${pct}%` }}
-              />
+              <div className={`h-full rounded-full ${completionBg(pct)}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
         </div>
+
+        {/* Progress Highlights — PRs and trending lifts */}
+        <ProgressHighlights details={details} />
 
         {/* Weekly Progress Chart */}
         <WeeklyProgressChart
@@ -318,5 +357,28 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
         )}
       </div>
     </div>
+  );
+}
+
+function TrendChip({ label, delta }) {
+  const tone =
+    delta == null ? 'text-gray-400'
+    : delta > 0   ? 'text-green-600'
+    : delta < 0   ? 'text-red-500'
+    : 'text-gray-500';
+  const arrow =
+    delta == null ? null
+    : delta > 0   ? '▲'
+    : delta < 0   ? '▼'
+    : '—';
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white border border-purple-100 text-xs">
+      <span className="font-semibold text-gray-700">{label}</span>
+      {arrow && (
+        <span className={`font-bold ${tone}`}>
+          {arrow}{delta != null ? ` ${Math.abs(delta)}%` : ''}
+        </span>
+      )}
+    </span>
   );
 }

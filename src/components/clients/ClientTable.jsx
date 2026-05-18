@@ -1,5 +1,6 @@
 import { Fragment } from 'react';
-import { formatDate, completionBg } from '../../utils/helpers';
+import { completionBg } from '../../utils/helpers';
+import { daysSince } from '../../utils/progress';
 import ClientDetails from './ClientDetails';
 
 export default function ClientTable({
@@ -59,9 +60,7 @@ export default function ClientTable({
                   <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
                     Week {client.current_week}, Day {client.current_day}
                   </span>
-                  <span className="text-xs text-gray-500">
-                    Last: {formatDate(client.last_logged_date || client.last_workout || client.lastWorkout)}
-                  </span>
+                  <LastSeenBadge date={client.last_logged_date || client.last_workout || client.lastWorkout} />
                 </div>
 
                 <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
@@ -175,8 +174,8 @@ export default function ClientTable({
                         W{client.current_week} D{client.current_day}
                       </span>
                     </td>
-                    <td className="p-3 text-sm text-gray-600">
-                      {formatDate(client.last_logged_date || client.last_workout || client.lastWorkout)}
+                    <td className="p-3">
+                      <LastSeenBadge date={client.last_logged_date || client.last_workout || client.lastWorkout} />
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
@@ -252,4 +251,18 @@ export default function ClientTable({
       </div>
     </>
   );
+}
+
+function LastSeenBadge({ date }) {
+  const d = daysSince(date);
+  if (d == null) {
+    return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">Never logged</span>;
+  }
+  let label, tone;
+  if (d === 0)      { label = 'Today';       tone = 'bg-emerald-100 text-emerald-700'; }
+  else if (d === 1) { label = 'Yesterday';   tone = 'bg-emerald-100 text-emerald-700'; }
+  else if (d < 3)   { label = `${d}d ago`;   tone = 'bg-emerald-100 text-emerald-700'; }
+  else if (d < 7)   { label = `${d}d ago`;   tone = 'bg-gray-100 text-gray-600'; }
+  else              { label = `${d}d ago ⚠`; tone = 'bg-amber-100 text-amber-700'; }
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${tone}`}>{label}</span>;
 }
