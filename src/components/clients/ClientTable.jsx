@@ -47,7 +47,10 @@ export default function ClientTable({
                     className="w-4 h-4 accent-purple-600"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-gray-900 truncate">{client.user_name}</div>
+                    <div className="font-bold text-gray-900 truncate flex items-center gap-2">
+                      <span className="truncate">{client.user_name}</span>
+                      <PlanBadge client={client} />
+                    </div>
                     <div className="text-sm text-gray-500 truncate">{client.user_email}</div>
                   </div>
                 </div>
@@ -163,7 +166,10 @@ export default function ClientTable({
                       />
                     </td>
                     <td className="p-3">
-                      <div className="font-semibold text-gray-900">{client.user_name}</div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                        <span>{client.user_name}</span>
+                        <PlanBadge client={client} />
+                      </div>
                       <div className="text-xs text-gray-500">{client.user_email}</div>
                     </td>
                     <td className="p-3 text-sm text-gray-700">
@@ -250,6 +256,25 @@ export default function ClientTable({
         </table>
       </div>
     </>
+  );
+}
+
+// Show $X/mo next to the client name when they have an active Stripe
+// subscription. Backend returns plan_tier, plan_amount_cents, plan_status
+// from the workout-clients / get-clients endpoints. Tier drives the color.
+function PlanBadge({ client }) {
+  if (client.plan_status !== 'active' || !client.plan_amount_cents) return null;
+  const dollars = Math.round(client.plan_amount_cents / 100);
+  const tones = {
+    basic:   'bg-gray-100 text-gray-700 border-gray-300',
+    coached: 'bg-purple-100 text-purple-700 border-purple-300',
+    elite:   'bg-amber-100 text-amber-800 border-amber-300',
+  };
+  const tone = tones[client.plan_tier] || tones.basic;
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${tone}`}>
+      ${dollars}/mo
+    </span>
   );
 }
 
