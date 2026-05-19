@@ -20,9 +20,12 @@ export default function ClientTable({
 }) {
   const allSelected = clients.length > 0 && selectedIds.size === clients.length;
   const clientKey = (c) => `${c.access_code || ''}|${c.user_email}`;
+  // One card per user (we group rows by email upstream), so a user's card is
+  // "expanded" whenever expandedClient is for the same email — regardless
+  // of which of their programs is currently focused. Comparing access_code
+  // here would collapse the card the instant they tap an Other Program.
   const isExpanded = (c) =>
-    expandedClient?.access_code === c.access_code &&
-    expandedClient?.user_email === c.user_email;
+    !!expandedClient && expandedClient.user_email === c.user_email;
 
   return (
     <>

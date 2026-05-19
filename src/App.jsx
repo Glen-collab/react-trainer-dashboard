@@ -243,13 +243,17 @@ function DashboardApp({ authUser, onLogout }) {
     return result;
   }, [groupedClients, searchTerm, sortBy, triageFilter]);
 
-  // View details
+  // View details. With one-card-per-user grouping, a user's card has the
+  // SAME user_email but may host multiple program access codes (primary +
+  // others). Toggle-collapse fires only when the same email is being
+  // re-clicked from the table — switching to a different PROGRAM under
+  // the same email passes skipToggle=true to bypass the collapse path.
   const handleViewDetails = useCallback(
-    async (client) => {
-      // If clicking same client, collapse
+    async (client, opts = {}) => {
+      const skipToggle = !!opts.skipToggle;
       if (
+        !skipToggle &&
         expandedClient &&
-        expandedClient.access_code === client.access_code &&
         expandedClient.user_email === client.user_email
       ) {
         setExpandedClient(null);
@@ -257,7 +261,6 @@ function DashboardApp({ authUser, onLogout }) {
         return;
       }
 
-      // Expand new client
       setExpandedClient(client);
       setClientDetails(null);
       setDetailsLoading(true);
@@ -311,7 +314,8 @@ function DashboardApp({ authUser, onLogout }) {
       plan_status:       expandedClient.plan_status,
       other_programs:    newOthers,
     };
-    handleViewDetails(newPrimary);
+    // skipToggle=true — same user but a different program, don't collapse.
+    handleViewDetails(newPrimary, { skipToggle: true });
   }, [expandedClient, handleViewDetails]);
 
   // Selection helpers
