@@ -243,9 +243,38 @@ function DashboardApp({ authUser, onLogout }) {
     return result;
   }, [groupedClients, searchTerm, sortBy, triageFilter]);
 
+  // View details
+  const handleViewDetails = useCallback(
+    async (client) => {
+      // If clicking same client, collapse
+      if (
+        expandedClient &&
+        expandedClient.access_code === client.access_code &&
+        expandedClient.user_email === client.user_email
+      ) {
+        setExpandedClient(null);
+        setClientDetails(null);
+        return;
+      }
+
+      // Expand new client
+      setExpandedClient(client);
+      setClientDetails(null);
+      setDetailsLoading(true);
+      try {
+        const details = await fetchClientDetails(client.access_code, client.user_email);
+        setClientDetails(details);
+      } finally {
+        setDetailsLoading(false);
+      }
+    },
+    [expandedClient, fetchClientDetails],
+  );
+
   // Swap the expanded-detail focus to one of the user's other programs.
-  // Rebuilds the other_programs array so the previously-primary program
-  // becomes selectable again, and the target program drops out of the list.
+  // Direct call into handleViewDetails — the toggle-collapse check compares
+  // access_codes, and since the target program's code differs from the
+  // currently-expanded one, it doesn't collapse, just swaps focus.
   const handleSwitchProgram = useCallback((program) => {
     if (!expandedClient) return;
     const prevAsProgram = {
@@ -282,40 +311,8 @@ function DashboardApp({ authUser, onLogout }) {
       plan_status:       expandedClient.plan_status,
       other_programs:    newOthers,
     };
-    // Clear current expansion first so handleViewDetails treats this as
-    // a fresh expansion (not a toggle-collapse on the same client).
-    setExpandedClient(null);
-    setClientDetails(null);
-    setTimeout(() => handleViewDetails(newPrimary), 0);
-  }, [expandedClient]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // View details
-  const handleViewDetails = useCallback(
-    async (client) => {
-      // If clicking same client, collapse
-      if (
-        expandedClient &&
-        expandedClient.access_code === client.access_code &&
-        expandedClient.user_email === client.user_email
-      ) {
-        setExpandedClient(null);
-        setClientDetails(null);
-        return;
-      }
-
-      // Expand new client
-      setExpandedClient(client);
-      setClientDetails(null);
-      setDetailsLoading(true);
-      try {
-        const details = await fetchClientDetails(client.access_code, client.user_email);
-        setClientDetails(details);
-      } finally {
-        setDetailsLoading(false);
-      }
-    },
-    [expandedClient, fetchClientDetails],
-  );
+    handleViewDetails(newPrimary);
+  }, [expandedClient, handleViewDetails]);
 
   // Selection helpers
   const clientKey = (c) => `${c.access_code || ''}|${c.user_email}`;
