@@ -173,23 +173,30 @@ function DashboardApp({ authUser, onLogout }) {
       return true;
     });
 
-    switch (sortBy) {
-      case 'name':
-        result.sort((a, b) => (a.user_name || '').localeCompare(b.user_name || ''));
-        break;
-      case 'completion':
-        result.sort((a, b) => (b.completion_rate || 0) - (a.completion_rate || 0));
-        break;
-      case 'recent':
-      default:
-        // Real API returns last_workout / lastWorkout; mock uses last_logged_date.
-        result.sort((a, b) => {
+    // Paid clients always sort to the top regardless of secondary sort —
+    // they're paying money, they deserve the eyeballs first.
+    const isPaid = (c) => c.plan_status === 'active';
+    const secondary = (a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return (a.user_name || a.user_email || '').localeCompare(b.user_name || b.user_email || '');
+        case 'completion':
+          return (b.completion_rate || 0) - (a.completion_rate || 0);
+        case 'recent':
+        default: {
+          // Real API returns last_workout / lastWorkout; mock uses last_logged_date.
           const ad = a.last_logged_date || a.last_workout || a.lastWorkout || 0;
           const bd = b.last_logged_date || b.last_workout || b.lastWorkout || 0;
           return new Date(bd) - new Date(ad);
-        });
-        break;
-    }
+        }
+      }
+    };
+
+    result.sort((a, b) => {
+      const ap = isPaid(a), bp = isPaid(b);
+      if (ap !== bp) return ap ? -1 : 1;
+      return secondary(a, b);
+    });
 
     return result;
   }, [clients, searchTerm, sortBy, triageFilter]);
