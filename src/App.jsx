@@ -274,6 +274,25 @@ function DashboardApp({ authUser, onLogout }) {
     [expandedClient, fetchClientDetails],
   );
 
+  // X button on the details panel — smarter than a hard close. If the
+  // user is currently looking at a non-primary program (they navigated via
+  // Other Programs), X takes them BACK to their primary program first.
+  // A second X closes the whole card. Matches the back-stack intuition.
+  const handleCloseDetails = useCallback(() => {
+    if (!expandedClient) return;
+    const userCard = groupedClients.find(
+      (c) => (c.user_email || '').toLowerCase() === (expandedClient.user_email || '').toLowerCase(),
+    );
+    // Already on the primary (or user not found in grouped list) → close.
+    if (!userCard || userCard.access_code === expandedClient.access_code) {
+      setExpandedClient(null);
+      setClientDetails(null);
+      return;
+    }
+    // Otherwise hop back to the primary, keeping the card open.
+    handleViewDetails(userCard, { skipToggle: true });
+  }, [expandedClient, groupedClients, handleViewDetails]);
+
   // Swap the expanded-detail focus to one of the user's other programs.
   // Direct call into handleViewDetails — the toggle-collapse check compares
   // access_codes, and since the target program's code differs from the
@@ -473,10 +492,7 @@ function DashboardApp({ authUser, onLogout }) {
           onToggleSelectAll={handleToggleSelectAll}
           onViewDetails={handleViewDetails}
           onDeleteClient={handleDeleteClient}
-          onCloseDetails={() => {
-            setExpandedClient(null);
-            setClientDetails(null);
-          }}
+          onCloseDetails={handleCloseDetails}
           onUpdateMaxes={handleUpdateMaxes}
           onSendCode={handleSendCode}
           onSwitchProgram={handleSwitchProgram}

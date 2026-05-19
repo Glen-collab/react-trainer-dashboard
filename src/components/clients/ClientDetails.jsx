@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { completionColor, completionBg, formatDate } from '../../utils/helpers';
 import { weekTrend, trendBadge } from '../../utils/progress';
 import WeeklyProgressChart from '../charts/WeeklyProgressChart';
@@ -9,6 +9,19 @@ import ProgressHighlights from './ProgressHighlights';
 
 export default function ClientDetails({ client, details, loading, onClose, onUpdateMaxes, onSwitchProgram }) {
   const [showMaxesEditor, setShowMaxesEditor] = useState(false);
+
+  // Scroll the panel top into view whenever the focused program changes —
+  // most useful on a program-switch, where the user is scrolled to the
+  // bottom of the previous panel (Other Programs list). On initial expand
+  // it just gently anchors the THIS WEEK hero in view.
+  const topRef = useRef(null);
+  useEffect(() => {
+    if (!client?.access_code) return;
+    const id = requestAnimationFrame(() => {
+      topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [client?.access_code, client?.user_email]);
   const [maxes, setMaxes] = useState({
     bench: client?.bench_max || '',
     squat: client?.squat_max || '',
@@ -83,7 +96,7 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
   const caloriesT  = trendBadge('est_calories', wkly);
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 sm:p-6 relative">
+    <div ref={topRef} className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 sm:p-6 relative scroll-mt-3">
       {/* Close button */}
       <button
         onClick={onClose}
