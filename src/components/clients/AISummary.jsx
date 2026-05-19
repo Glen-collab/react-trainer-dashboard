@@ -229,6 +229,48 @@ export default function AISummary({ client, details }) {
     navigator.clipboard?.writeText(summary).catch(() => {});
   }
 
+  // Push the current summary (as edited in the textarea) to the member's
+  // dashboard. Coached members see monthly summaries here; Elite members
+  // see weekly + monthly. Auth: coach JWT from the existing dashboard login.
+  const [sharing, setSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState('');
+  async function sendToDashboard() {
+    if (!summary || !period || !client?.user_email) return;
+    setSharing(true);
+    setShareMsg('');
+    try {
+      let token = '';
+      try {
+        const raw = window.localStorage.getItem('bsa_dashboard_auth');
+        if (raw) token = (JSON.parse(raw) || {}).token || '';
+      } catch { /* missing or corrupt — request will 401 below */ }
+
+      const res = await fetch(`${PLATFORM_API_BASE}/coaches/share-summary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          client_email: client.user_email,
+          period,
+          body: summary,
+        }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        throw new Error(t || `${res.status} ${res.statusText}`);
+      }
+      setShareMsg(`Sent to ${firstName}'s dashboard ✓`);
+      setTimeout(() => setShareMsg(''), 4000);
+    } catch (e) {
+      setShareMsg(`Failed: ${e.message || 'try again'}`);
+      setTimeout(() => setShareMsg(''), 5000);
+    } finally {
+      setSharing(false);
+    }
+  }
+
   // Take the current summary + the coach's freeform observations, ask the
   // LLM to rewrite the summary so it incorporates those observations and
   // adds expanded coaching guidance on them. Stays in the same voice and
@@ -345,6 +387,13 @@ export default function AISummary({ client, details }) {
           {!busy && summary && (
             <div className="flex flex-wrap gap-2 mt-3">
               <button
+                onClick={sendToDashboard}
+                disabled={sharing || !client?.user_email}
+                className="flex-1 min-w-[160px] px-4 py-2.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {sharing ? 'Sending…' : '📌 Send to Dashboard'}
+              </button>
+              <button
                 onClick={emailToClient}
                 disabled={!client?.user_email}
                 className="flex-1 min-w-[140px] px-4 py-2.5 rounded-lg bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
@@ -363,6 +412,11 @@ export default function AISummary({ client, details }) {
               >
                 Regenerate
               </button>
+            </div>
+          )}
+          {shareMsg && (
+            <div className={`mt-2 text-xs ${shareMsg.startsWith('Failed') ? 'text-red-600' : 'text-emerald-700'}`}>
+              {shareMsg}
             </div>
           )}
 
