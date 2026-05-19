@@ -13,12 +13,20 @@ export function daysSince(dateStr) {
 
 // Bucket a client into one of the triage filter chips.
 // Order of checks matters — first match wins.
+// "Not started" runs FIRST so a 0-logs user doesn't get tagged as "New" —
+// "New" is for people getting started (1-2 logs in week 1); "Not Started"
+// is for people who never tapped in despite being assigned a program.
 export function triageBucket(client) {
   if (!client) return 'active';
   const d = daysSince(client.last_logged_date || client.last_workout || client.lastWorkout);
+  // user_workout_count is the sum across ALL programs (attached during
+  // grouping). Falls back to the primary program's total_workouts for
+  // any caller that hasn't grouped yet.
+  const userLogs = Number(client.user_workout_count ?? client.total_workouts) || 0;
   const totalWorkouts = Number(client.total_workouts) || 0;
   const currentWeek = Number(client.current_week) || 0;
 
+  if (userLogs === 0 && d == null) return 'not_started';
   if (currentWeek <= 1 && totalWorkouts < 3) return 'new';
   if (d == null || d >= 7) return 'check_in';
   if (d >= 3) return 'quiet';
@@ -26,15 +34,16 @@ export function triageBucket(client) {
 }
 
 export const TRIAGE_LABELS = {
-  all:      { label: 'All',             color: 'gray' },
-  check_in: { label: 'Needs Check-In',  color: 'red'  },
-  quiet:    { label: 'Quiet',           color: 'amber' },
-  active:   { label: 'Active',          color: 'green' },
-  new:      { label: 'New',             color: 'blue' },
+  all:         { label: 'All',             color: 'gray'   },
+  not_started: { label: 'Not Started',     color: 'orange' },
+  check_in:    { label: 'Needs Check-In',  color: 'red'    },
+  quiet:       { label: 'Quiet',           color: 'amber'  },
+  active:      { label: 'Active',          color: 'green'  },
+  new:         { label: 'New',             color: 'blue'   },
 };
 
 export function triageCounts(clients) {
-  const counts = { all: clients.length, check_in: 0, quiet: 0, active: 0, new: 0 };
+  const counts = { all: clients.length, not_started: 0, check_in: 0, quiet: 0, active: 0, new: 0 };
   for (const c of clients) counts[triageBucket(c)]++;
   return counts;
 }

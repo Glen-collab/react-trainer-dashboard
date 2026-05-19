@@ -187,20 +187,31 @@ function DashboardApp({ authUser, onLogout }) {
         existing.others.push(c);
       }
     }
-    return [...byEmail.values()].map(({ primary, others }) => ({
-      ...primary,
-      other_programs: others.map((p) => ({
-        access_code:   p.access_code || p.accessCode,
-        user_email:    p.user_email,
-        user_name:     p.user_name || p.name,
-        program_name:  p.program_nickname || p.program_name || '(unnamed)',
-        current_week:  p.current_week || p.currentWeek || 1,
-        current_day:   p.current_day  || p.currentDay  || 1,
-        workout_count: p.workout_count || p.workoutCount || p.total_workouts || 0,
-        last_workout:  p.last_logged_date || p.last_workout || p.lastWorkout,
-        completion_rate: p.completion_rate || 0,
-      })),
-    }));
+    return [...byEmail.values()].map(({ primary, others }) => {
+      const primaryLogs = Number(primary.workout_count ?? primary.workoutCount ?? primary.total_workouts) || 0;
+      const otherLogs = others.reduce(
+        (sum, p) => sum + (Number(p.workout_count ?? p.workoutCount ?? p.total_workouts) || 0),
+        0,
+      );
+      return {
+        ...primary,
+        // user_workout_count = total across ALL programs (primary + others).
+        // Used by triageBucket so "Not Started" catches users with zero
+        // logs anywhere, not just zero on their primary program.
+        user_workout_count: primaryLogs + otherLogs,
+        other_programs: others.map((p) => ({
+          access_code:   p.access_code || p.accessCode,
+          user_email:    p.user_email,
+          user_name:     p.user_name || p.name,
+          program_name:  p.program_nickname || p.program_name || '(unnamed)',
+          current_week:  p.current_week || p.currentWeek || 1,
+          current_day:   p.current_day  || p.currentDay  || 1,
+          workout_count: p.workout_count || p.workoutCount || p.total_workouts || 0,
+          last_workout:  p.last_logged_date || p.last_workout || p.lastWorkout,
+          completion_rate: p.completion_rate || 0,
+        })),
+      };
+    });
   }, [clients]);
 
   // Filtered + sorted clients
