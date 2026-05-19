@@ -73,6 +73,7 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
     days_per_week,
     total_volume_stats = {},
     weekly_volume_stats = [],
+    lifetime = null,
   } = details;
 
   const daysPerWeek = days_per_week || client?.days_per_week || 5;
@@ -203,6 +204,53 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
             </div>
           </div>
         </div>
+
+        {/* Across-all-programs mini-card — bridges the per-program view
+            with the user's full training history. Only renders when the
+            user has been on multiple programs; otherwise the per-program
+            "Lifetime" card already covers it. */}
+        {lifetime?.program_count > 1 && (
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-200 lg:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                Across all programs
+              </span>
+              <span className="text-xs text-indigo-600 font-semibold">
+                {lifetime.program_count} programs · {lifetime.sessions.toLocaleString()} workouts
+              </span>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              {lifetime.tonnage > 0 && (
+                <span className="text-sm">
+                  <span className="text-base">🏋️</span>{' '}
+                  <strong className="text-indigo-900">{lifetime.tonnage.toLocaleString()}</strong>
+                  <span className="text-indigo-600 text-xs"> lbs total</span>
+                </span>
+              )}
+              {lifetime.calories > 0 && (
+                <span className="text-sm">
+                  <span className="text-base">🔥</span>{' '}
+                  <strong className="text-indigo-900">{lifetime.calories.toLocaleString()}</strong>
+                  <span className="text-indigo-600 text-xs"> cal</span>
+                </span>
+              )}
+              {lifetime.cardio_min > 0 && (
+                <span className="text-sm">
+                  <span className="text-base">⏱️</span>{' '}
+                  <strong className="text-indigo-900">{lifetime.cardio_min.toLocaleString()}</strong>
+                  <span className="text-indigo-600 text-xs"> min cardio</span>
+                </span>
+              )}
+              {lifetime.core_reps > 0 && (
+                <span className="text-sm">
+                  <span className="text-base">💪</span>{' '}
+                  <strong className="text-indigo-900">{lifetime.core_reps.toLocaleString()}</strong>
+                  <span className="text-indigo-600 text-xs"> core reps</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Progress Highlights — PRs and trending lifts */}
         <ProgressHighlights details={details} />

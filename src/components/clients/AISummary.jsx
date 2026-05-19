@@ -42,8 +42,31 @@ function compactWorkouts(recent, days) {
     .slice(0, days === 7 ? 8 : 25);
 }
 
+function buildJourneyBlock(lifetime) {
+  if (!lifetime || !lifetime.programs?.length || lifetime.programs.length < 2) return '';
+  const progLines = lifetime.programs.map((p) => {
+    const tag = p.is_current ? ' [CURRENT]' : '';
+    const range = (p.first_logged && p.last_logged)
+      ? `${p.first_logged} → ${p.last_logged}`
+      : (p.is_current ? 'just assigned — no logs yet' : 'no logs');
+    return `  - ${p.name}${tag} — ${p.sessions} session(s), ${range}`;
+  }).join('\n');
+  return [
+    '',
+    'TRAINING JOURNEY (every program this client has been on):',
+    progLines,
+    `\nCross-program totals: ${lifetime.sessions} workouts, ${(lifetime.tonnage || 0).toLocaleString()} lbs tonnage, ${(lifetime.calories || 0).toLocaleString()} calories.`,
+    '',
+    'HOW TO USE THIS:',
+    '  - If the CURRENT program is recently assigned (no logs or only 1–2), this is a transition. Acknowledge what they just finished (the most-recent past program with sessions) and frame what is new about the current one.',
+    '  - If past programs ended weeks ago and they\'re mid-stride on the current one, don\'t belabor history — keep the focus on now.',
+    '  - The cross-program totals are useful for showing scale across their journey, not for replacing the current-period numbers.',
+  ].join('\n');
+}
+
 function buildPrompt(period, data, voice) {
   const header = `You are ${voice} writing a ${period} progress message for ${data.name}.`;
+  const journeyBlock = buildJourneyBlock(data.lifetime);
 
   const sessionLines = (data.sessions || [])
     .map((s) => {
@@ -71,6 +94,7 @@ function buildPrompt(period, data, voice) {
       '',
       'CONTEXT (last 7 days):',
       thisWeekFacts + '\nSessions this week:\n' + sessionLines,
+      journeyBlock,
       '',
       'TONE RULES (these override everything else):',
       '  - This is a WEEKLY CHECK-IN, not a performance review. Be warm, encouraging, energizing.',
@@ -100,6 +124,7 @@ function buildPrompt(period, data, voice) {
     '',
     'CONTEXT (last 30 days):',
     monthlyFacts + '\nSessions:\n' + sessionLines,
+    journeyBlock,
     '',
     'TASK:',
     "Write a monthly progress report. Include:",
@@ -185,6 +210,23 @@ export default function AISummary({ client, details }) {
       calories_this_week: weekCals,
       cardio_min_this_week: weekCardio,
       sessions,
+      // Cross-program journey — lets the LLM recognize program transitions
+      // and ground the summary in the user's broader training history,
+      // not just the current program.
+      lifetime: details?.lifetime ? {
+        program_count: details.lifetime.program_count,
+        sessions:      details.lifetime.sessions,
+        tonnage:       details.lifetime.tonnage,
+        calories:      details.lifetime.calories,
+        cardio_min:    details.lifetime.cardio_min,
+        programs:      (details.lifetime.programs || []).map((p) => ({
+          name:         p.program_name,
+          sessions:     p.sessions,
+          first_logged: p.first_logged,
+          last_logged:  p.last_logged,
+          is_current:   p.is_current,
+        })),
+      } : null,
     };
 
     try {
