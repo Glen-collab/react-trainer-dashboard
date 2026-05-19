@@ -4,11 +4,26 @@
 
 const DAY_MS = 86400000;
 
+// Calendar-day diff in the VIEWER'S local timezone. Yes-to "today/yesterday"
+// labels matching what the user actually experienced. A bare "YYYY-MM-DD"
+// string is parsed as Y/M/D in local time (not midnight UTC) to avoid the
+// off-by-one error where the JS Date constructor treats a date-only string
+// as UTC.
 export function daysSince(dateStr) {
   if (!dateStr) return null;
-  const t = new Date(dateStr).getTime();
-  if (!Number.isFinite(t)) return null;
-  return Math.floor((Date.now() - t) / DAY_MS);
+  let then;
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    then = new Date(y, m - 1, d); // local-TZ midnight
+  } else {
+    then = new Date(dateStr);
+    if (!Number.isFinite(then.getTime())) return null;
+    // Drop time-of-day so we compare CALENDAR DAYS, not 24-hour windows.
+    then = new Date(then.getFullYear(), then.getMonth(), then.getDate());
+  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today.getTime() - then.getTime()) / DAY_MS);
 }
 
 // Bucket a client into one of the triage filter chips.

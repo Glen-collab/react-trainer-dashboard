@@ -1,11 +1,25 @@
 export function formatDate(dateStr) {
   if (!dateStr) return 'Never';
-  const d = new Date(dateStr);
+
+  // Calendar-day comparison in viewer's local TZ. "YYYY-MM-DD" strings get
+  // parsed component-wise so they aren't pulled into UTC midnight (which
+  // would render an evening-CT workout as "today" instead of "yesterday").
+  let d;
+  if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, da] = dateStr.split('-').map(Number);
+    d = new Date(y, m - 1, da);
+  } else {
+    d = new Date(dateStr);
+    if (!Number.isFinite(d.getTime())) return 'Never';
+  }
   const now = new Date();
-  const diff = Math.floor((now - d) / 86400000);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const that  = new Date(d.getFullYear(),    d.getMonth(),    d.getDate());
+  const diff = Math.round((today.getTime() - that.getTime()) / 86400000);
+
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  if (diff < 7) return `${diff} days ago`;
+  if (diff < 7)   return `${diff} days ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
