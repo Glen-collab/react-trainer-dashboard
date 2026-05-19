@@ -161,9 +161,51 @@ function DashboardApp({ authUser, onLogout }) {
     if (statsData) setStats(statsData);
   }, [fetchClients, fetchStats]);
 
+  // Collapse multiple program rows for the same user into one consolidated
+  // card. Primary = most-recently-active program; the rest get attached as
+  // other_programs[] for the View Details panel. Triage chips + filters use
+  // this grouped list too, so counts reflect unique people not programs.
+  const groupedClients = useMemo(() => {
+    const lastActiveTs = (c) => {
+      const d = c.last_logged_date || c.last_workout || c.lastWorkout || c.updated_at || 0;
+      const t = new Date(d).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
+    const byEmail = new Map();
+    for (const c of clients) {
+      const key = (c.user_email || '').toLowerCase();
+      if (!key) continue;
+      const existing = byEmail.get(key);
+      if (!existing) {
+        byEmail.set(key, { primary: c, others: [] });
+        continue;
+      }
+      if (lastActiveTs(c) > lastActiveTs(existing.primary)) {
+        existing.others.push(existing.primary);
+        existing.primary = c;
+      } else {
+        existing.others.push(c);
+      }
+    }
+    return [...byEmail.values()].map(({ primary, others }) => ({
+      ...primary,
+      other_programs: others.map((p) => ({
+        access_code:   p.access_code || p.accessCode,
+        user_email:    p.user_email,
+        user_name:     p.user_name || p.name,
+        program_name:  p.program_nickname || p.program_name || '(unnamed)',
+        current_week:  p.current_week || p.currentWeek || 1,
+        current_day:   p.current_day  || p.currentDay  || 1,
+        workout_count: p.workout_count || p.workoutCount || p.total_workouts || 0,
+        last_workout:  p.last_logged_date || p.last_workout || p.lastWorkout,
+        completion_rate: p.completion_rate || 0,
+      })),
+    }));
+  }, [clients]);
+
   // Filtered + sorted clients
   const filteredClients = useMemo(() => {
-    let result = [...clients].filter((c) => {
+    let result = [...groupedClients].filter((c) => {
       const term = searchTerm.toLowerCase();
       const matchesSearch =
         (c.user_name || '').toLowerCase().includes(term) ||
@@ -199,7 +241,53 @@ function DashboardApp({ authUser, onLogout }) {
     });
 
     return result;
-  }, [clients, searchTerm, sortBy, triageFilter]);
+  }, [groupedClients, searchTerm, sortBy, triageFilter]);
+
+  // Swap the expanded-detail focus to one of the user's other programs.
+  // Rebuilds the other_programs array so the previously-primary program
+  // becomes selectable again, and the target program drops out of the list.
+  const handleSwitchProgram = useCallback((program) => {
+    if (!expandedClient) return;
+    const prevAsProgram = {
+      access_code:   expandedClient.access_code,
+      user_email:    expandedClient.user_email,
+      user_name:     expandedClient.user_name,
+      program_name:  expandedClient.program_nickname || expandedClient.program_name,
+      current_week:  expandedClient.current_week,
+      current_day:   expandedClient.current_day,
+      workout_count: expandedClient.workout_count || expandedClient.total_workouts,
+      last_workout:  expandedClient.last_logged_date || expandedClient.last_workout,
+      completion_rate: expandedClient.completion_rate,
+    };
+    const newOthers = (expandedClient.other_programs || [])
+      .filter((p) => p.access_code !== program.access_code)
+      .concat([prevAsProgram]);
+    const newPrimary = {
+      user_email: expandedClient.user_email,
+      email:      expandedClient.user_email,
+      user_name:  expandedClient.user_name,
+      name:       expandedClient.user_name,
+      access_code:   program.access_code,
+      program_name:  program.program_name,
+      current_week:  program.current_week,
+      current_day:   program.current_day,
+      workout_count: program.workout_count,
+      total_workouts: program.workout_count,
+      completion_rate: program.completion_rate,
+      last_workout:  program.last_workout,
+      last_logged_date: program.last_workout,
+      // plan is per-user, not per-program, so carry it
+      plan_tier:         expandedClient.plan_tier,
+      plan_amount_cents: expandedClient.plan_amount_cents,
+      plan_status:       expandedClient.plan_status,
+      other_programs:    newOthers,
+    };
+    // Clear current expansion first so handleViewDetails treats this as
+    // a fresh expansion (not a toggle-collapse on the same client).
+    setExpandedClient(null);
+    setClientDetails(null);
+    setTimeout(() => handleViewDetails(newPrimary), 0);
+  }, [expandedClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // View details
   const handleViewDetails = useCallback(
@@ -369,7 +457,7 @@ function DashboardApp({ authUser, onLogout }) {
         />
 
         <TriageFilters
-          clients={clients}
+          clients={groupedClients}
           activeFilter={triageFilter}
           onChange={setTriageFilter}
         />
@@ -390,6 +478,7 @@ function DashboardApp({ authUser, onLogout }) {
           }}
           onUpdateMaxes={handleUpdateMaxes}
           onSendCode={handleSendCode}
+          onSwitchProgram={handleSwitchProgram}
         />
 
         <BulkActions

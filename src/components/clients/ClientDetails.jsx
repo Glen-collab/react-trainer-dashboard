@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { completionColor, completionBg } from '../../utils/helpers';
+import { completionColor, completionBg, formatDate } from '../../utils/helpers';
 import { weekTrend, trendBadge } from '../../utils/progress';
 import WeeklyProgressChart from '../charts/WeeklyProgressChart';
 import VolumeChart from '../charts/VolumeChart';
@@ -7,7 +7,7 @@ import RecentWorkouts from './RecentWorkouts';
 import AISummary from './AISummary';
 import ProgressHighlights from './ProgressHighlights';
 
-export default function ClientDetails({ client, details, loading, onClose, onUpdateMaxes }) {
+export default function ClientDetails({ client, details, loading, onClose, onUpdateMaxes, onSwitchProgram }) {
   const [showMaxesEditor, setShowMaxesEditor] = useState(false);
   const [maxes, setMaxes] = useState({
     bench: client?.bench_max || '',
@@ -268,6 +268,50 @@ export default function ClientDetails({ client, details, loading, onClose, onUpd
             <p className="text-xs text-gray-400">
               Opens the builder with this client's program. Changes save as overrides per week/day.
             </p>
+          </div>
+        )}
+
+        {/* Other Programs — this user is on multiple workout programs.
+            Compact list so they don't dominate; tap any to swap focus. */}
+        {client?.other_programs?.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4 lg:col-span-2">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-gray-700">
+                Other Programs ({client.other_programs.length})
+              </h4>
+              <span className="text-[11px] text-gray-400">
+                Tap any to focus
+              </span>
+            </div>
+            <div className="flex flex-col divide-y divide-gray-100">
+              {client.other_programs.map((p) => (
+                <button
+                  key={`${p.access_code}-${p.user_email}`}
+                  onClick={() => onSwitchProgram && onSwitchProgram(p)}
+                  className="flex items-center justify-between gap-3 py-2 px-1 hover:bg-gray-50 rounded text-left transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-gray-900 truncate">
+                      {p.program_name || '(unnamed)'}
+                    </div>
+                    <div className="text-[11px] text-gray-500 truncate">
+                      Week {p.current_week || 1} &middot; Day {p.current_day || 1}
+                      {' · '}
+                      <span className="font-mono">{p.access_code}</span>
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-xs font-semibold text-purple-600">
+                      {p.workout_count || 0} logs
+                    </div>
+                    <div className="text-[10px] text-gray-400">
+                      {p.last_workout ? `last: ${formatDate(p.last_workout)}` : 'never logged'}
+                    </div>
+                  </div>
+                  <span className="text-gray-300 text-sm flex-shrink-0">›</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
