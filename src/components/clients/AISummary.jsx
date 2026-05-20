@@ -18,25 +18,69 @@ const PLATFORM_API_BASE =
   (typeof window !== 'undefined' && window.tdConfig?.apiBase) ||
   'https://app.bestrongagain.com/api';
 
+// Pull the client's own notes out of a logged workout so the AI can see them.
+// Three sources, in priority order:
+//   - per-exercise clientNote (what they typed on a specific exercise)
+//   - per-block clientNotes (what they typed on a superset / conditioning block)
+//   - skipped exercises (completed=false) — listed by name so the AI knows
+//     what they swapped or saved for another day
+function extractWorkoutNotes(parsedData) {
+  if (!parsedData || typeof parsedData !== 'object') return null;
+  const blocks = parsedData.blocks || [];
+  const pieces = [];
+  const skipped = [];
+
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    const type = block.type || '';
+    if (type === 'theme' || type === 'warmup' || type === 'cooldown' || type === 'mobility') continue;
+
+    if (block.clientNotes) {
+      pieces.push(`[${type || 'block'} note] ${block.clientNotes}`);
+    }
+    for (const ex of (block.exercises || [])) {
+      if (!ex || typeof ex !== 'object') continue;
+      if (ex.clientNote) {
+        pieces.push(`${ex.name || 'exercise'}: ${ex.clientNote}`);
+      }
+      if (ex.completed === false && ex.name) {
+        skipped.push(ex.name);
+      }
+    }
+  }
+
+  if (skipped.length) {
+    pieces.push(`Skipped this session: ${skipped.join(', ')}`);
+  }
+
+  return pieces.length ? pieces.join(' | ') : null;
+}
+
 function compactWorkouts(recent, days) {
   if (!Array.isArray(recent) || !recent.length) return [];
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   return recent
     .filter((w) => {
-      const t = w.logged_at ? new Date(w.logged_at).getTime() : null;
+      const raw = w.workout_date || w.workoutDate || w.logged_at;
+      const t = raw ? new Date(raw).getTime() : null;
       return t && t >= cutoff;
     })
     .map((w) => {
-      const stats = w.volume_stats || {};
+      const stats = w.parsed_data?.volume_stats || w.volume_stats || {};
+      const workoutNotes = extractWorkoutNotes(w.parsed_data);
+      const chatbotNotes = w.chatbot_data?.messages?.length
+        ? w.chatbot_data.messages.map((m) => m.text).filter(Boolean).slice(-2).join(' / ')
+        : null;
+      const combined = [workoutNotes, chatbotNotes].filter(Boolean).join(' || ') || null;
+      const rawDate = w.workout_date || w.workoutDate || w.logged_at || '';
+
       return {
-        date:     w.logged_at?.slice(0, 10),
-        day:      w.day_label || `Week ${w.week} Day ${w.day}`,
+        date:     typeof rawDate === 'string' ? rawDate.slice(0, 10) : '',
+        day:      w.day_label || `Week ${w.week_number ?? w.week} Day ${w.day_number ?? w.day}`,
         tonnage:  stats.tonnage,
         calories: stats.est_calories,
         cardio_min: stats.cardio_minutes,
-        notes:    (w.chatbot_data?.messages?.length
-                    ? w.chatbot_data.messages.map((m) => m.text).filter(Boolean).slice(-2).join(' / ')
-                    : null)
+        notes:    combined
       };
     })
     .slice(0, days === 7 ? 8 : 25);
