@@ -153,27 +153,40 @@ function buildPrompt(period, data, voice) {
     ].join('\n');
   }
 
-  // monthly — clinical, by-the-numbers, full program context
+  // monthly — clinical, by-the-numbers, LAST 30 DAYS ONLY
+  const monthPct = data.month_expected > 0
+    ? Math.min(Math.round((data.workouts_this_month / data.month_expected) * 100), 100)
+    : 0;
   const monthlyFacts =
     `Program: ${data.program || '(no program loaded)'}\n` +
-    `Current week: ${data.current_week ?? '?'}\n` +
-    `Workouts completed: ${data.workouts_logged ?? 0}${data.expected_workouts ? ' of ' + data.expected_workouts + ' expected' : ''}\n` +
-    `Completion rate: ${data.completion_pct ?? 0}%\n` +
-    (data.total_tonnage    ? `Total tonnage: ${data.total_tonnage.toLocaleString()} lbs\n` : '') +
-    (data.total_calories   ? `Total calories burned: ${data.total_calories.toLocaleString()}\n` : '') +
-    (data.cardio_minutes   ? `Cardio minutes: ${data.cardio_minutes}\n` : '');
+    `Current week in program: ${data.current_week ?? '?'}\n` +
+    `Workouts THIS MONTH (last 30 days): ${data.workouts_this_month ?? 0} of ${data.month_expected || '?'} expected\n` +
+    `Completion rate THIS MONTH: ${monthPct}%\n` +
+    (data.month_tonnage    ? `Tonnage this month: ${Math.round(data.month_tonnage).toLocaleString()} lbs\n` : '') +
+    (data.month_calories   ? `Calories burned this month: ${Math.round(data.month_calories).toLocaleString()}\n` : '') +
+    (data.month_cardio_min ? `Cardio minutes this month: ${data.month_cardio_min}\n` : '') +
+    `\nLifetime context (background only — do NOT present these as this month's numbers):\n` +
+    `  Total workouts ever: ${data.lifetime_logged ?? 0}\n` +
+    `  Overall completion: ${data.lifetime_completion_pct ?? 0}%\n`;
 
   return [
     header,
     '',
     'CONTEXT (last 30 days):',
-    monthlyFacts + '\nSessions:\n' + sessionLines,
+    monthlyFacts + '\nSessions this month:\n' + sessionLines,
     journeyBlock,
+    '',
+    'TONE RULES (these override everything else):',
+    '  - ALL numbers in BY THE NUMBERS must reflect THIS MONTH (last 30 days) ONLY. Never mix lifetime totals into the monthly numbers.',
+    '  - NEVER shame, scold, or use words like "miss", "rough", "failure", "big problem", "we need to talk", "concerning".',
+    '  - If they had a low month or big gap since their last workout, frame it as "life got busy — the door\'s open" with a concrete next step. NOT discipline.',
+    '  - ALWAYS lead with what they DID accomplish, even if it was 1 workout.',
+    '  - Be encouraging and forward-looking. The goal is that they read this and feel motivated, not judged.',
     '',
     'TASK:',
     "Write a monthly progress report. Include:",
     "  1. Short opening paragraph (2-3 sentences) framing the month and any pattern.",
-    "  2. A 'BY THE NUMBERS' section with each metric on its own line: tonnage, calories burned, workouts completed, cardio minutes, completion %.",
+    "  2. A 'BY THE NUMBERS' section with each metric on its own line. ONLY use THIS MONTH's numbers: workouts completed this month, completion % this month, tonnage this month, calories this month, cardio minutes this month.",
     "  3. A 'WINS' paragraph naming notable progress.",
     "  4. A 'FOCUS NEXT MONTH' paragraph with 2-3 things to dial in. Constructive — direction, not discipline.",
     "  5. Sign off as the coach on a new line.",
@@ -237,17 +250,40 @@ export default function AISummary({ client, details }) {
       weekCardio  += vs.cardio_minutes || 0;
     }
 
+    // Monthly rollups — last 30 days only, not lifetime
+    const monthCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const thisMonthSessions = (details?.recent_workouts || []).filter((w) => {
+      const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
+      return d >= monthCutoffMs;
+    });
+    let monthTonnage = 0, monthCals = 0, monthCardio = 0;
+    for (const w of thisMonthSessions) {
+      const vs = w.parsed_data?.volume_stats || w.volume_stats || {};
+      monthTonnage += vs.tonnage || 0;
+      monthCals    += vs.est_calories || 0;
+      monthCardio  += vs.cardio_minutes || 0;
+    }
+    const daysPerWeek = details?.days_per_week || 0;
+    const monthExpected = Math.round(daysPerWeek * 4.3);
+
     const data = {
       name: client?.user_name || client?.user_email || 'Athlete',
       program: client?.program_name,
       current_week: client?.current_week,
-      days_per_week: details?.days_per_week,
-      completion_pct: Math.min(Math.round(details?.completion_rate || 0), 100),
-      workouts_logged: details?.total_logged || 0,
-      expected_workouts: details?.expected_workouts || 0,
+      days_per_week: daysPerWeek,
+      // Lifetime numbers (for context, not the headline)
+      lifetime_logged: details?.total_logged || 0,
+      lifetime_expected: details?.expected_workouts || 0,
+      lifetime_completion_pct: Math.min(Math.round(details?.completion_rate || 0), 100),
       total_tonnage: details?.total_volume_stats?.tonnage,
       total_calories: details?.total_volume_stats?.est_calories,
       cardio_minutes: details?.total_volume_stats?.cardio_minutes,
+      // Monthly rollups (last 30 days)
+      workouts_this_month: thisMonthSessions.length,
+      month_expected: monthExpected,
+      month_tonnage: monthTonnage,
+      month_calories: monthCals,
+      month_cardio_min: monthCardio,
       // weekly-only rollups
       workouts_this_week: thisWeekSessions.length,
       tonnage_this_week:  weekTonnage,
