@@ -56,9 +56,9 @@ function extractWorkoutNotes(parsedData) {
   return pieces.length ? pieces.join(' | ') : null;
 }
 
-function compactWorkouts(recent, days) {
+function compactWorkouts(recent, days, explicitCutoffMs) {
   if (!Array.isArray(recent) || !recent.length) return [];
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const cutoff = explicitCutoffMs != null ? explicitCutoffMs : (Date.now() - days * 24 * 60 * 60 * 1000);
   return recent
     .filter((w) => {
       const raw = w.workout_date || w.workoutDate || w.logged_at;
@@ -232,12 +232,21 @@ export default function AISummary({ client, details }) {
     setError(null);
     setSummary('');
 
-    const days = p === 'weekly' ? 7 : 30;
-    const sessions = compactWorkouts(details?.recent_workouts, days);
+    // Fixed calendar week: Sunday 00:00 → Saturday 23:59, so the same
+    // workout always belongs to the same week regardless of when the coach
+    // generates the report.
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay()); // back up to Sunday
+    weekStart.setHours(0, 0, 0, 0);
+    const cutoffMs = weekStart.getTime();
 
-    // For weekly, compute this-week-only rollups so the prompt can frame the
-    // message as a check-in (not a program audit). 7-day window from today.
-    const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const days = p === 'weekly' ? 7 : 30;
+    const sessions = p === 'weekly'
+      ? compactWorkouts(details?.recent_workouts, days, cutoffMs)
+      : compactWorkouts(details?.recent_workouts, days);
+
+    // This-week-only rollups so the prompt frames the message as a check-in.
     const thisWeekSessions = (details?.recent_workouts || []).filter((w) => {
       const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
       return d >= cutoffMs;
