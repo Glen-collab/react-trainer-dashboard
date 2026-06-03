@@ -110,6 +110,8 @@ function buildJourneyBlock(lifetime) {
 
 function buildPrompt(period, data, voice) {
   const header = `You are ${voice} writing a ${period} progress message for ${data.name}.`;
+  // Sign-off = a dash + first name only (e.g. "-Glen"), never "Coach ...".
+  const signName = (voice || '').replace(/^coach\s+/i, '').trim().split(/\s+/)[0] || (voice || 'Coach');
   const journeyBlock = buildJourneyBlock(data.lifetime);
 
   const sessionLines = (data.sessions || [])
@@ -149,7 +151,7 @@ function buildPrompt(period, data, voice) {
       '  - Goal: athlete reads it and feels seen + motivated to train tomorrow.',
       '',
       'TASK:',
-      'Write a 3-5 sentence weekly check-in. Address the client by first name. End with energy. Sign off as the coach on a new line. Output ONLY the email body.',
+      `Write a 3-5 sentence weekly check-in. Address the client by first name. End with energy. Sign off on a new line as exactly "-${signName}" (a dash then the first name — do NOT write "Coach"). Output ONLY the email body.`,
     ].join('\n');
   }
 
@@ -189,7 +191,7 @@ function buildPrompt(period, data, voice) {
     "  2. A 'BY THE NUMBERS' section with each metric on its own line. ONLY use THIS MONTH's numbers: workouts completed this month, completion % this month, tonnage this month, calories this month, cardio minutes this month.",
     "  3. A 'WINS' paragraph naming notable progress.",
     "  4. A 'FOCUS NEXT MONTH' paragraph with 2-3 things to dial in. Constructive — direction, not discipline.",
-    "  5. Sign off as the coach on a new line.",
+    `  5. Sign off on a new line as exactly "-${signName}" (a dash then the first name — do NOT write "Coach").`,
     "More clinical than the weekly check-in. Numbers should be visible but stay encouraging. Address the client by first name. Output ONLY the email body."
   ].join('\n');
 }
