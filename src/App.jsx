@@ -128,6 +128,10 @@ function DashboardApp({ authUser, onLogout }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('recent');
   const [triageFilter, setTriageFilter] = useState('all');
+  // Tracker-only ($5.99) clients live in their own segment so they don't
+  // clutter the coaching roster. Default = coaching (the people Glen actually
+  // works with day to day). The tracker segment is the upsell radar.
+  const [tierSegment, setTierSegment] = useState('coaching'); // 'coaching' | 'tracker'
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [expandedClient, setExpandedClient] = useState(null);
   const [clientDetails, setClientDetails] = useState(null);
@@ -214,9 +218,20 @@ function DashboardApp({ authUser, onLogout }) {
     });
   }, [clients]);
 
+  // Split the roster into coaching vs tracker-only ($5.99) segments. A client
+  // is "tracker-only" purely by their Stripe tier. Everyone else (coached,
+  // elite, basic, or access-code-only members) is a coaching client.
+  const isTrackerOnly = (c) => (c.plan_tier || '').toLowerCase() === 'tracker';
+  const trackerCount = useMemo(() => groupedClients.filter(isTrackerOnly).length, [groupedClients]);
+  const coachingCount = groupedClients.length - trackerCount;
+  const segmentClients = useMemo(
+    () => groupedClients.filter((c) => (tierSegment === 'tracker' ? isTrackerOnly(c) : !isTrackerOnly(c))),
+    [groupedClients, tierSegment],
+  );
+
   // Filtered + sorted clients
   const filteredClients = useMemo(() => {
-    let result = [...groupedClients].filter((c) => {
+    let result = [...segmentClients].filter((c) => {
       const term = searchTerm.toLowerCase();
       const matchesSearch =
         (c.user_name || '').toLowerCase().includes(term) ||
@@ -252,7 +267,7 @@ function DashboardApp({ authUser, onLogout }) {
     });
 
     return result;
-  }, [groupedClients, searchTerm, sortBy, triageFilter]);
+  }, [segmentClients, searchTerm, sortBy, triageFilter]);
 
   // View details. With one-card-per-user grouping, a user's card has the
   // SAME user_email but may host multiple program access codes (primary +
@@ -479,6 +494,42 @@ function DashboardApp({ authUser, onLogout }) {
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <StatsCards stats={stats} />
 
+        {/* Segment toggle: coaching roster vs tracker-only ($5.99) upsell radar.
+            Only shows the tracker tab once at least one $5.99 client exists. */}
+        {trackerCount > 0 && (
+          <div className="flex gap-2 bg-white rounded-xl shadow-sm p-1.5 w-fit">
+            {[
+              { key: 'coaching', label: 'Coaching', count: coachingCount },
+              { key: 'tracker', label: 'Tracker-only · $5.99', count: trackerCount },
+            ].map((seg) => {
+              const active = tierSegment === seg.key;
+              return (
+                <button
+                  key={seg.key}
+                  onClick={() => { setTierSegment(seg.key); setTriageFilter('all'); }}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                    active
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow'
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  {seg.label}
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${active ? 'bg-white/25' : 'bg-gray-200 text-gray-600'}`}>
+                    {seg.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {tierSegment === 'tracker' && (
+          <p className="text-sm text-gray-500 -mt-2">
+            Self-serve members on the $5.99 tracker. Sorted by most recent activity —
+            the ones logging workouts are the warm upsell candidates for a $20+ plan.
+          </p>
+        )}
+
         <SearchBar
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -488,7 +539,7 @@ function DashboardApp({ authUser, onLogout }) {
         />
 
         <TriageFilters
-          clients={groupedClients}
+          clients={segmentClients}
           activeFilter={triageFilter}
           onChange={setTriageFilter}
         />

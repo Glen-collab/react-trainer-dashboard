@@ -270,8 +270,11 @@ export default function ClientTable({
 // from the workout-clients / get-clients endpoints. Tier drives the color.
 function PlanBadge({ client }) {
   if (client.plan_status !== 'active' || !client.plan_amount_cents) return null;
-  const dollars = Math.round(client.plan_amount_cents / 100);
+  const cents = client.plan_amount_cents;
+  // Sub-$10 tiers (the $5.99 tracker) keep their cents; whole-dollar plans drop them.
+  const amount = cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`;
   const tones = {
+    tracker: 'bg-sky-100 text-sky-700 border-sky-300',
     basic:   'bg-gray-100 text-gray-700 border-gray-300',
     coached: 'bg-purple-100 text-purple-700 border-purple-300',
     elite:   'bg-amber-100 text-amber-800 border-amber-300',
@@ -279,7 +282,7 @@ function PlanBadge({ client }) {
   const tone = tones[client.plan_tier] || tones.basic;
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${tone}`}>
-      ${dollars}/mo
+      {amount}/mo
     </span>
   );
 }
