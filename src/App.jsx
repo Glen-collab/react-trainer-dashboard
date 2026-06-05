@@ -5,6 +5,7 @@ import SearchBar from './components/dashboard/SearchBar';
 import TriageFilters from './components/dashboard/TriageFilters';
 import ClientTable from './components/clients/ClientTable';
 import BulkActions from './components/clients/BulkActions';
+import BulkWeeklySummary from './components/clients/BulkWeeklySummary';
 import DeleteModal from './components/modals/DeleteModal';
 import LoginGate, { useAuth } from './components/auth/LoginGate';
 import { triageBucket } from './utils/progress';
@@ -138,6 +139,7 @@ function DashboardApp({ authUser, onLogout }) {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, clients: [] });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [bulkSummaryOpen, setBulkSummaryOpen] = useState(false);
 
   // Initial fetch with retry on failure (first load after deploy can fail due to cold start)
   useEffect(() => {
@@ -544,6 +546,20 @@ function DashboardApp({ authUser, onLogout }) {
           onChange={setTriageFilter}
         />
 
+        {/* Bulk weekly summaries — generate a draft for everyone in view, review,
+            then post to dashboards. Hidden on the tracker-only segment (those
+            $5.99 clients have no dashboard). */}
+        {tierSegment !== 'tracker' && filteredClients.length > 0 && (
+          <div className="flex justify-end -mt-2">
+            <button
+              onClick={() => setBulkSummaryOpen(true)}
+              className="px-4 py-2 rounded-lg bg-white shadow-sm text-sm font-semibold text-indigo-600 hover:bg-indigo-50 border border-indigo-100"
+            >
+              📝 Weekly summaries → all ({filteredClients.length})
+            </button>
+          </div>
+        )}
+
         <ClientTable
           clients={filteredClients}
           selectedIds={selectedIds}
@@ -565,6 +581,15 @@ function DashboardApp({ authUser, onLogout }) {
           onDeleteSelected={handleDeleteSelected}
         />
       </main>
+
+      {/* Bulk weekly summaries — review & post to all clients in view */}
+      {bulkSummaryOpen && (
+        <BulkWeeklySummary
+          clients={filteredClients}
+          fetchClientDetails={fetchClientDetails}
+          onClose={() => setBulkSummaryOpen(false)}
+        />
+      )}
 
       {/* Delete Modal */}
       <DeleteModal

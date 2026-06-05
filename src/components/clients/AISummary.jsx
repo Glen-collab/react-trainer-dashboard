@@ -10,11 +10,11 @@ import { useEffect, useState } from 'react';
 // we fetch it and pass it as coach_config context so the bot speaks in
 // THEIR voice with THEIR business link / sign-off.
 
-const CHAT_API_BASE =
+export const CHAT_API_BASE =
   (typeof window !== 'undefined' && window.tdConfig?.chatApiBase) ||
   'https://chat.bestrongagain.com';
 
-const PLATFORM_API_BASE =
+export const PLATFORM_API_BASE =
   (typeof window !== 'undefined' && window.tdConfig?.apiBase) ||
   'https://app.bestrongagain.com/api';
 
@@ -108,7 +108,7 @@ function buildJourneyBlock(lifetime) {
   ].join('\n');
 }
 
-function buildPrompt(period, data, voice) {
+export function buildPrompt(period, data, voice) {
   const header = `You are ${voice} writing a ${period} progress message for ${data.name}.`;
   // Sign-off = a dash + first name only (e.g. "-Glen"), never "Coach ...".
   const signName = (voice || '').replace(/^coach\s+/i, '').trim().split(/\s+/)[0] || (voice || 'Coach');
@@ -211,6 +211,86 @@ function buildPrompt(period, data, voice) {
   ].join('\n');
 }
 
+// Shape a client's raw details into the `data` object both the single-client
+// summary and the bulk weekly run feed to buildPrompt(). Pure — no React.
+export function buildSummaryData(client, details, period) {
+  // Fixed calendar week: Sunday 00:00 → Saturday 23:59.
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - now.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+  const cutoffMs = weekStart.getTime();
+
+  const days = period === 'weekly' ? 7 : 30;
+  const sessions = period === 'weekly'
+    ? compactWorkouts(details?.recent_workouts, days, cutoffMs)
+    : compactWorkouts(details?.recent_workouts, days);
+
+  const thisWeekSessions = (details?.recent_workouts || []).filter((w) => {
+    const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
+    return d >= cutoffMs;
+  });
+  let weekTonnage = 0, weekCals = 0, weekCardio = 0;
+  for (const w of thisWeekSessions) {
+    const vs = w.parsed_data?.volume_stats || w.volume_stats || {};
+    weekTonnage += vs.tonnage || 0;
+    weekCals    += vs.est_calories || 0;
+    weekCardio  += vs.cardio_minutes || 0;
+  }
+
+  const monthCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const thisMonthSessions = (details?.recent_workouts || []).filter((w) => {
+    const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
+    return d >= monthCutoffMs;
+  });
+  let monthTonnage = 0, monthCals = 0, monthCardio = 0;
+  for (const w of thisMonthSessions) {
+    const vs = w.parsed_data?.volume_stats || w.volume_stats || {};
+    monthTonnage += vs.tonnage || 0;
+    monthCals    += vs.est_calories || 0;
+    monthCardio  += vs.cardio_minutes || 0;
+  }
+  const daysPerWeek = details?.days_per_week || 0;
+  const monthExpected = Math.round(daysPerWeek * 4.3);
+
+  return {
+    name: client?.user_name || client?.user_email || 'Athlete',
+    program: client?.program_name,
+    current_week: client?.current_week,
+    days_per_week: daysPerWeek,
+    lifetime_logged: details?.total_logged || 0,
+    lifetime_expected: details?.expected_workouts || 0,
+    lifetime_completion_pct: Math.min(Math.round(details?.completion_rate || 0), 100),
+    total_tonnage: details?.total_volume_stats?.tonnage,
+    total_calories: details?.total_volume_stats?.est_calories,
+    cardio_minutes: details?.total_volume_stats?.cardio_minutes,
+    workouts_this_month: thisMonthSessions.length,
+    month_expected: monthExpected,
+    month_tonnage: monthTonnage,
+    month_calories: monthCals,
+    month_cardio_min: monthCardio,
+    workouts_this_week: thisWeekSessions.length,
+    tonnage_this_week:  weekTonnage,
+    calories_this_week: weekCals,
+    cardio_min_this_week: weekCardio,
+    sessions,
+    lifetime: details?.lifetime ? {
+      program_count: details.lifetime.program_count,
+      sessions:      details.lifetime.sessions,
+      tonnage:       details.lifetime.tonnage,
+      calories:      details.lifetime.calories,
+      cardio_min:    details.lifetime.cardio_min,
+      programs:      (details.lifetime.programs || []).map((p) => ({
+        name:         p.program_name,
+        sessions:     p.sessions,
+        first_logged: p.first_logged,
+        last_logged:  p.last_logged,
+        is_current:   p.is_current,
+      })),
+    } : null,
+  };
+}
+
 export default function AISummary({ client, details }) {
   const [period, setPeriod]   = useState(null);   // null | 'weekly' | 'monthly'
   const [busy, setBusy]       = useState(false);
@@ -249,91 +329,7 @@ export default function AISummary({ client, details }) {
     setError(null);
     setSummary('');
 
-    // Fixed calendar week: Sunday 00:00 → Saturday 23:59, so the same
-    // workout always belongs to the same week regardless of when the coach
-    // generates the report.
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay()); // back up to Sunday
-    weekStart.setHours(0, 0, 0, 0);
-    const cutoffMs = weekStart.getTime();
-
-    const days = p === 'weekly' ? 7 : 30;
-    const sessions = p === 'weekly'
-      ? compactWorkouts(details?.recent_workouts, days, cutoffMs)
-      : compactWorkouts(details?.recent_workouts, days);
-
-    // This-week-only rollups so the prompt frames the message as a check-in.
-    const thisWeekSessions = (details?.recent_workouts || []).filter((w) => {
-      const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
-      return d >= cutoffMs;
-    });
-    let weekTonnage = 0, weekCals = 0, weekCardio = 0;
-    for (const w of thisWeekSessions) {
-      const vs = w.parsed_data?.volume_stats || w.volume_stats || {};
-      weekTonnage += vs.tonnage || 0;
-      weekCals    += vs.est_calories || 0;
-      weekCardio  += vs.cardio_minutes || 0;
-    }
-
-    // Monthly rollups — last 30 days only, not lifetime
-    const monthCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const thisMonthSessions = (details?.recent_workouts || []).filter((w) => {
-      const d = new Date(w.workout_date || w.workoutDate || 0).getTime();
-      return d >= monthCutoffMs;
-    });
-    let monthTonnage = 0, monthCals = 0, monthCardio = 0;
-    for (const w of thisMonthSessions) {
-      const vs = w.parsed_data?.volume_stats || w.volume_stats || {};
-      monthTonnage += vs.tonnage || 0;
-      monthCals    += vs.est_calories || 0;
-      monthCardio  += vs.cardio_minutes || 0;
-    }
-    const daysPerWeek = details?.days_per_week || 0;
-    const monthExpected = Math.round(daysPerWeek * 4.3);
-
-    const data = {
-      name: client?.user_name || client?.user_email || 'Athlete',
-      program: client?.program_name,
-      current_week: client?.current_week,
-      days_per_week: daysPerWeek,
-      // Lifetime numbers (for context, not the headline)
-      lifetime_logged: details?.total_logged || 0,
-      lifetime_expected: details?.expected_workouts || 0,
-      lifetime_completion_pct: Math.min(Math.round(details?.completion_rate || 0), 100),
-      total_tonnage: details?.total_volume_stats?.tonnage,
-      total_calories: details?.total_volume_stats?.est_calories,
-      cardio_minutes: details?.total_volume_stats?.cardio_minutes,
-      // Monthly rollups (last 30 days)
-      workouts_this_month: thisMonthSessions.length,
-      month_expected: monthExpected,
-      month_tonnage: monthTonnage,
-      month_calories: monthCals,
-      month_cardio_min: monthCardio,
-      // weekly-only rollups
-      workouts_this_week: thisWeekSessions.length,
-      tonnage_this_week:  weekTonnage,
-      calories_this_week: weekCals,
-      cardio_min_this_week: weekCardio,
-      sessions,
-      // Cross-program journey — lets the LLM recognize program transitions
-      // and ground the summary in the user's broader training history,
-      // not just the current program.
-      lifetime: details?.lifetime ? {
-        program_count: details.lifetime.program_count,
-        sessions:      details.lifetime.sessions,
-        tonnage:       details.lifetime.tonnage,
-        calories:      details.lifetime.calories,
-        cardio_min:    details.lifetime.cardio_min,
-        programs:      (details.lifetime.programs || []).map((p) => ({
-          name:         p.program_name,
-          sessions:     p.sessions,
-          first_logged: p.first_logged,
-          last_logged:  p.last_logged,
-          is_current:   p.is_current,
-        })),
-      } : null,
-    };
+    const data = buildSummaryData(client, details, p);
 
     try {
       const res = await fetch(`${CHAT_API_BASE}/api/embed-chat`, {
