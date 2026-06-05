@@ -125,9 +125,21 @@ function buildPrompt(period, data, voice) {
     }).join('\n') || '  (none in this window)';
 
   if (period === 'weekly') {
+    // Where we are in the calendar week (Sun=0..Sat=6). Drives the "finish the
+    // week" nudge: if planned workouts remain and there are still training days
+    // left, we keep the message on THIS week and never preview next week.
+    const dow = new Date().getDay();
+    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dow];
+    const daysLeftInWeek = 6 - dow; // training days left through Saturday
+    const planned = Number(data.days_per_week) || 0;
+    const doneThisWeek = Number(data.workouts_this_week) || 0;
+    const remaining = Math.max(0, planned - doneThisWeek);
+    const weekUnfinished = planned > 0 && remaining > 0 && daysLeftInWeek > 0;
+
     // THIS WEEK ONLY — not cumulative. Weekly is a check-in, not a program recap.
     const thisWeekFacts =
-      `Sessions THIS week: ${data.workouts_this_week ?? 0} of ${data.days_per_week ?? '?'} planned\n` +
+      `Sessions THIS week: ${doneThisWeek} of ${planned || '?'} planned\n` +
+      (planned ? `Today is ${dayName} — ${remaining} workout(s) still to do this week, ${daysLeftInWeek} day(s) left (through Saturday)\n` : '') +
       (data.tonnage_this_week  ? `Tonnage this week: ${Math.round(data.tonnage_this_week).toLocaleString()} lbs\n` : '') +
       (data.calories_this_week ? `Calories this week: ${Math.round(data.calories_this_week).toLocaleString()}\n` : '') +
       (data.cardio_min_this_week ? `Cardio minutes this week: ${data.cardio_min_this_week}\n` : '') +
@@ -148,10 +160,13 @@ function buildPrompt(period, data, voice) {
       '  - NEVER shame, scold, or use words like "miss", "rough", "failure", "big problem", "we need to talk".',
       '  - If they had a low or zero week, frame it as "life happens — let\'s get back at it" with hope and a small concrete next step. NOT discipline.',
       '  - Do NOT cite cumulative/lifetime program completion %. That belongs in the monthly report.',
+      weekUnfinished
+        ? `  - THE WEEK IS NOT OVER (today is ${dayName}; ${remaining} workout(s) still to go with ${daysLeftInWeek} day(s) left). Do NOT mention or look ahead to "next week." Rally them to FINISH THIS WEEK STRONG and get all ${planned} workouts in — that is the call to action.`
+        : '  - The training week is essentially done — celebrate closing it out and carry the momentum forward.',
       '  - Goal: athlete reads it and feels seen + motivated to train tomorrow.',
       '',
       'TASK:',
-      `Write a 3-5 sentence weekly check-in. Address the client by first name. End with energy. Sign off on a new line as exactly "-${signName}" (a dash then the first name — do NOT write "Coach"). Output ONLY the email body.`,
+      `Write a 3-5 sentence weekly check-in. Address the client by first name. ${weekUnfinished ? 'End by encouraging them to finish the week strong and get the remaining workout(s) in.' : 'End with energy.'} Sign off on a new line as exactly "-${signName}" (a dash then the first name — do NOT write "Coach"). Output ONLY the email body.`,
     ].join('\n');
   }
 
