@@ -483,12 +483,23 @@ function DashboardApp({ authUser, onLogout }) {
               {authUser.first_name ? `Welcome, ${authUser.first_name}` : 'Manage your clients and programs'}
             </p>
           </div>
-          <button
-            onClick={onLogout}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Same-tab return to the coach platform so you can get back to
+                the app without hunting for a browser tab. */}
+            <a
+              href="https://app.bestrongagain.com"
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition no-underline"
+              title="Back to app.bestrongagain.com"
+            >
+              ← My App
+            </a>
+            <button
+              onClick={onLogout}
+              className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
