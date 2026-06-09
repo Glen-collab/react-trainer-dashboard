@@ -147,6 +147,8 @@ function BlockSection({ block }) {
 function ExerciseRow({ exercise }) {
   const {
     name,
+    prescribedName,
+    swappedExercise,
     sets,
     reps,
     targetReps,
@@ -214,13 +216,28 @@ function ExerciseRow({ exercise }) {
   const nameClass = completed ? 'font-semibold text-gray-800' : 'text-gray-400';
   const valueClass = completed ? 'text-gray-600' : 'text-gray-400';
 
+  // Did the client swap this lift for a different one? Flag it in yellow with
+  // what was originally prescribed, so the coach sees the substitution at a glance.
+  const isSwapped = swappedExercise && prescribedName &&
+    swappedExercise.trim().toLowerCase() !== prescribedName.trim().toLowerCase();
+
   return (
     <div className="flex flex-col gap-0.5 text-xs">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className={nameClass}>
-          {completed && <span className="mr-1">✅</span>}
-          {name}
-        </span>
+        {isSwapped ? (
+          <span className={nameClass}>
+            {completed && <span className="mr-1">✅</span>}
+            <span className="bg-yellow-100 text-yellow-900 rounded px-1 font-semibold">
+              🔄 {name}
+            </span>
+            <span className="ml-1 text-[11px] text-yellow-700 italic">(swapped from {prescribedName})</span>
+          </span>
+        ) : (
+          <span className={nameClass}>
+            {completed && <span className="mr-1">✅</span>}
+            {name}
+          </span>
+        )}
         <span className={`${valueClass} ml-auto whitespace-nowrap`}>
           {displayStr}{recIcon}
         </span>

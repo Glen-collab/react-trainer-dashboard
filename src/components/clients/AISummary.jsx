@@ -29,6 +29,7 @@ function extractWorkoutNotes(parsedData) {
   const blocks = parsedData.blocks || [];
   const pieces = [];
   const skipped = [];
+  const swaps = [];
 
   for (const block of blocks) {
     if (!block || typeof block !== 'object') continue;
@@ -43,12 +44,21 @@ function extractWorkoutNotes(parsedData) {
       if (ex.clientNote) {
         pieces.push(`${ex.name || 'exercise'}: ${ex.clientNote}`);
       }
+      // Client subbed a different lift for what was prescribed — worth noting
+      // so the summary can praise the awareness/autonomy.
+      if (ex.swappedExercise && ex.prescribedName &&
+          ex.swappedExercise.trim().toLowerCase() !== ex.prescribedName.trim().toLowerCase()) {
+        swaps.push(`${ex.swappedExercise} instead of ${ex.prescribedName}`);
+      }
       if (ex.completed === false && ex.name) {
         skipped.push(ex.name);
       }
     }
   }
 
+  if (swaps.length) {
+    pieces.push(`Swapped exercises (made a smart substitution): ${swaps.join('; ')}`);
+  }
   if (skipped.length) {
     pieces.push(`Skipped this session: ${skipped.join(', ')}`);
   }
@@ -157,6 +167,7 @@ export function buildPrompt(period, data, voice) {
       'TONE RULES (these override everything else):',
       '  - This is a WEEKLY CHECK-IN, not a performance review. Be warm, encouraging, energizing.',
       '  - ALWAYS lead with what they did right. Even ONE workout this week is a win — name it.',
+      '  - If the notes mention SWAPPED exercises, praise the awareness/autonomy — e.g. "great job being aware and swapping in a smart alternative." A swap = a WIN (they showed up and adapted), never "didn\'t follow the plan".',
       '  - NEVER shame, scold, or use words like "miss", "rough", "failure", "big problem", "we need to talk".',
       '  - If they had a low or zero week, frame it as "life happens — let\'s get back at it" with hope and a small concrete next step. NOT discipline.',
       '  - Do NOT cite cumulative/lifetime program completion %. That belongs in the monthly report.',
@@ -198,6 +209,7 @@ export function buildPrompt(period, data, voice) {
     '  - NEVER shame, scold, or use words like "miss", "rough", "failure", "big problem", "we need to talk", "concerning".',
     '  - If they had a low month or big gap since their last workout, frame it as "life got busy — the door\'s open" with a concrete next step. NOT discipline.',
     '  - ALWAYS lead with what they DID accomplish, even if it was 1 workout.',
+    '  - If any session notes mention SWAPPED exercises, call it out in WINS as smart self-coaching / body awareness — never as deviating from the program.',
     '  - Be encouraging and forward-looking. The goal is that they read this and feel motivated, not judged.',
     '',
     'TASK:',
