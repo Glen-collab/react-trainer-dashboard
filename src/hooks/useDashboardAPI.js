@@ -1,7 +1,10 @@
 import { useState, useCallback } from 'react';
 
-const getAjaxUrl = () => window.trainerDashboard?.ajaxUrl || '/wp-admin/admin-ajax.php';
-const getNonce = () => window.trainerDashboard?.nonce || '';
+// Nothing here talks to WordPress any more — everything is the Flask API on
+// EC2. The old wp-admin/admin-ajax.php helpers were still sitting here,
+// unreferenced: had anything ever called them on Netlify they'd have hit the
+// SPA redirect, been handed index.html, and failed on JSON.parse with a
+// nonsense error. Removed rather than left as a trap.
 const getApiBase = () => {
   // Use Netlify proxy to avoid CORS issues
   if (window.location.hostname !== 'localhost') {
@@ -13,17 +16,6 @@ const getApiBase = () => {
 export default function useDashboardAPI(authUser) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
-  const wpAjax = useCallback(async (action, data = {}) => {
-    const form = new FormData();
-    form.append('action', action);
-    form.append('nonce', getNonce());
-    Object.entries(data).forEach(([k, v]) => form.append(k, v));
-    const res = await fetch(getAjaxUrl(), { method: 'POST', body: form });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.data?.message || 'Request failed');
-    return json.data;
-  }, []);
 
   const externalApi = useCallback(async (endpoint, payload) => {
     const res = await fetch(`${getApiBase()}/${endpoint}`, {
